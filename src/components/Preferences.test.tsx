@@ -6,8 +6,9 @@ import { defaultPreferences } from "../lib/types";
 import { memoryLevel, preferencesError } from "../lib/preferences";
 import defaults from "../../tests/fixtures/preferences.json";
 
-async function setup() {
+async function setup(preferences = defaultPreferences) {
   const backend = createDemoBackend();
+  await backend.savePreferences(preferences);
   const base = await backend.bootstrap();
   const onSaved = vi.fn();
   const onClose = vi.fn();
@@ -40,6 +41,34 @@ it("shares the complete native default contract and preserves threshold boundari
     preferencesError({ ...defaultPreferences, hotkey: "Ctrl+Ctrl+F1" }),
   ).not.toBeNull();
 });
+
+it.each([
+  { startWithWindows: true, startInTray: false },
+  { startWithWindows: false, startInTray: true },
+])(
+  "saves startWithWindows=$startWithWindows without changing startInTray=$startInTray",
+  async ({ startWithWindows, startInTray }) => {
+    const { backend, onSaved, onClose, save } = await setup({
+      ...defaultPreferences,
+      startWithWindows: !startWithWindows,
+      startInTray,
+    });
+    const startup = screen.getByRole("switch", { name: "Start with Windows" });
+    expect(startup).toHaveProperty("checked", !startWithWindows);
+    fireEvent.click(startup);
+    expect(startup).toHaveProperty("checked", startWithWindows);
+    expect(screen.getByRole("switch", { name: "Start in Tray" })).toHaveProperty(
+      "checked",
+      startInTray,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    const expected = { ...defaultPreferences, startWithWindows, startInTray };
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(expected));
+    expect(save).toHaveBeenCalledExactlyOnceWith(expected);
+    expect((await backend.bootstrap()).preferences).toEqual(expected);
+    expect(onClose).toHaveBeenCalledOnce();
+  },
+);
 
 it("saves both preference sections together and captures a global shortcut", async () => {
   const { onSaved, onClose } = await setup();
@@ -108,24 +137,31 @@ it("keeps invalid thresholds and native save failures inside the form", async ()
 });
 
 it("discards unsaved preferences on Cancel", async () => {
-  const { onClose, save } = await setup();
+  const { backend, onSaved, onClose, save } = await setup();
+  fireEvent.click(screen.getByRole("switch", { name: "Start with Windows" }));
   fireEvent.click(screen.getByLabelText("Start in Tray"));
   fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
   expect(save).not.toHaveBeenCalled();
+  expect(onSaved).not.toHaveBeenCalled();
+  expect((await backend.bootstrap()).preferences).toEqual(defaultPreferences);
   expect(onClose).toHaveBeenCalledOnce();
 });
 
-it("enables Save only for edits and returns to the unchanged state after reverting", async () => {
-  await setup();
-  const save = screen.getByRole("button", { name: "Save" });
-  expect(save).toBeDisabled();
-  fireEvent.click(screen.getByRole("switch", { name: "Start in Tray" }));
-  expect(save).toBeEnabled();
-  expect(screen.getByRole("status")).toHaveTextContent("Unsaved changes");
-  fireEvent.click(screen.getByRole("switch", { name: "Start in Tray" }));
-  expect(save).toBeDisabled();
-  expect(screen.getByRole("status")).toBeEmptyDOMElement();
-});
+it.each(["Start with Windows", "Start in Tray"])(
+  "enables Save only for edits and returns to the unchanged state after reverting %s",
+  async (label) => {
+    await setup();
+    const save = screen.getByRole("button", { name: "Save" });
+    expect(screen.getByRole("switch", { name: label })).not.toBeChecked();
+    expect(save).toBeDisabled();
+    fireEvent.click(screen.getByRole("switch", { name: label }));
+    expect(save).toBeEnabled();
+    expect(screen.getByRole("status")).toHaveTextContent("Unsaved changes");
+    fireEvent.click(screen.getByRole("switch", { name: label }));
+    expect(save).toBeDisabled();
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+  },
+);
 
 it("supports keyboard tabs and focuses a validation error on the other tab", async () => {
   const { save } = await setup();

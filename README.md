@@ -6,12 +6,16 @@ Designed for a lightweight tray workflow, it pairs clear memory graphs with a li
 
 [Download for Windows](https://github.com/ShianMike/OpenMemDuct/releases/latest) · [Report an Issue](https://github.com/ShianMike/OpenMemDuct/issues)
 
+**Unsigned release:** The Windows installer is currently unsigned. Windows may show **Unknown publisher** or a **SmartScreen** warning. Review the release details and checksum below before deciding whether to run it; keep Windows protections enabled.
+
 ![OpenMemDuct dashboard showing physical memory, pagefile, and system working set graphs](docs/images/dashboard.jpg)
 
 ## Features
 
 - **Three memory graphs** — Physical Memory, Pagefile, and System Working Set, with up to one hour of history.
 - **Live tray percentage** — See physical-memory usage while the dashboard is closed.
+- **Start with Windows (next release)** — Launch automatically at sign-in and manage the entry in Windows Startup Apps. Not included in 0.1.0.
+- **One cleanup approval per session (next release)** — Approve the first cleanup, then clean again without repeated administrator prompts while the tray app keeps running. Not included in 0.1.0.
 - **One-click cleanup** — Choose from eight cleanup targets and inspect before/after results directly on the graphs.
 - **Optional automation** — Configure a usage threshold, cleanup interval, or global keyboard shortcut.
 - **A focused light interface** — Glass panels, a custom title bar, keyboard controls, and reduced-motion support.
@@ -33,6 +37,8 @@ Download the Windows x64 setup EXE from the [latest release](https://github.com/
 2. Select **Clean Memory**. Results appear on each graph; select a result label for details.
 3. Close the dashboard to keep the tray monitor running. Use **Open** to return or **Quit** from the tray menu to exit.
 
+**Next release (not in 0.1.0):** To launch at sign-in, enable **Preferences → General → Start with Windows**. Enable **Start in Tray** as well to keep the dashboard closed when the app starts.
+
 Automatic cleanup and the global shortcut are off by default. Automatic cleanup runs only in an existing administrator session on a supported Windows build.
 
 Cleanup results report observed memory changes. Trimming caches can increase subsequent disk activity, and performance depends on the workload.
@@ -52,7 +58,16 @@ See [Contributing](CONTRIBUTING.md) for checks and project structure.
 
 ## Release Status
 
-Version 0.1.0 is available for Windows 11 x64. Release downloads include the NSIS setup EXE and SHA256SUMS. The installer is unsigned; Windows may display an unknown-publisher warning.
+Version 0.1.0 is available for Windows 11 x64. Release downloads include the unsigned NSIS installer `OpenMemDuct_0.1.0_x64-setup.exe` and `SHA256SUMS`.
+
+Download both files from the same release into one folder, open PowerShell there, and run:
+
+```powershell
+Get-FileHash -Algorithm SHA256 -LiteralPath .\OpenMemDuct_0.1.0_x64-setup.exe
+Get-Content -LiteralPath .\SHA256SUMS
+```
+
+Compare the reported hash with the entry for `OpenMemDuct_0.1.0_x64-setup.exe` in `SHA256SUMS` (letter case does not matter). If they differ, do not run the installer. A match confirms the downloaded bytes match the published checksum; it is not a trusted publisher signature or a safety guarantee.
 
 Cleanup remains limited to build 26200. Clean-machine coverage, additional Windows builds, and controlled performance comparisons are ongoing.
 

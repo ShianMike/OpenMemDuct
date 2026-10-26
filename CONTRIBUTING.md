@@ -58,6 +58,8 @@ cargo run --locked --manifest-path src-tauri/Cargo.toml --bin openmemduct -- --d
 cargo run --locked --manifest-path src-tauri/Cargo.toml --bin openmemduct -- --helper-self-test
 ```
 
+The helper self-test sends two no-op requests through one helper and verifies that it exits on disconnect. It also runs in the Windows Checks and Package workflows.
+
 ## Project Structure
 
 | Path              | Purpose                                                           |
@@ -78,7 +80,7 @@ Physical Memory measures usable physical total minus available memory. Pagefile 
 
 Cleanup is restricted to Windows 11 x64 build family 26200. Some operations use private Native API classes; any additional build family or cleanup target requires compatibility validation. Keep the fixed cleanup allowlist, authenticated helper transport, request validation, concurrency guard, and observation period intact.
 
-The helper requests elevation only when necessary. Automatic cleanup runs only in an already elevated session on a supported build. Global shortcuts pause while Preferences is open. Settings changes are validated and saved together; a failed save preserves the previous file.
+The first manual cleanup requests elevation when necessary and keeps an authenticated cleanup helper for the app session. Closing the dashboard leaves that session available; quitting the app closes it. Automatic cleanup runs only in an already elevated session on a supported build. Global shortcuts pause while Preferences is open. Settings changes are validated and saved together; a failed save preserves the previous file.
 
 Keep interface effects brief and finite, and preserve reduced-motion and reduced-transparency fallbacks. Chart gaps, cleanup results, and recorded history should reflect actual readings rather than fabricated interpolation or assumed savings.
 

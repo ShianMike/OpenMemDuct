@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Optional Start with Windows setting, with registration in Windows Startup Apps.
+- Reuse administrator approval for memory cleanup throughout an app session.
+
 ## 0.1.0 — 2026-10-26
 
 Initial Windows x64 release.

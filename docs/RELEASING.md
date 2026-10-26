@@ -13,6 +13,12 @@ The source version is **0.1.0** across npm, Cargo, and Tauri. The [GitHub Releas
 
 The manual Package workflow runs the source checks, builds the Windows x64 installer, and uploads it with SHA256SUMS as a workflow artifact. It does not publish a GitHub release automatically.
 
+## Unsigned Distribution
+
+Distribute unsigned installers for now and disclose this clearly beside the download link and in every release note. Windows may show Unknown publisher or SmartScreen warnings; do not instruct users to disable protections. If signing is introduced, verify the signature and update the disclosure.
+
+Publish `SHA256SUMS` with each installer. A matching SHA-256 hash confirms the downloaded bytes match the published checksum; it is not a trusted publisher signature or a safety guarantee. The README includes a PowerShell verification example.
+
 ## Before Packaging
 
 - [ ] Publish the source repository and run its Windows Checks workflow on the intended release commit.
@@ -45,8 +51,9 @@ The development tray-lifecycle and native cleanup observations do not replace th
 
 ## Publish
 
-- [ ] Choose and document the signing approach; verify signatures if signing is used.
+- [ ] State the signing status in every release note (currently unsigned).
 - [ ] Move the completed changelog scope into a dated version entry.
 - [ ] Tag the exact commit whose checks and packaged artifacts were validated.
-- [ ] Publish the installer, checksums, source tag, supported Windows build, and known limitations together.
+- [ ] Publish the installer and `SHA256SUMS` together. In every release note, link the exact source commit and the Windows Checks and Package CI runs used for that release, and include the installer's SHA-256 checksum.
+- [ ] In every release note, state that cleanup supports Windows build 26200 and other builds remain in monitoring mode. Record factual validation limits: what was checked, on which Windows build, and which installed-app checks or performance comparisons remain unverified. Do not describe source or CI checks as installed-app validation.
 - [ ] Verify the public release page and download links, then update the README's release status.

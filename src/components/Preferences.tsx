@@ -13,7 +13,11 @@ type NumberSetting =
   | "dangerPercent"
   | "autoThresholdPercent"
   | "autoIntervalMinutes";
-type ToggleSetting = "startInTray" | "showCleanupResults" | "notificationSound";
+type ToggleSetting =
+  | "startWithWindows"
+  | "startInTray"
+  | "showCleanupResults"
+  | "notificationSound";
 
 export function Preferences({
   preferences,
@@ -234,6 +238,10 @@ export function Preferences({
               <div className="preferences-group-label">App and Tray</div>
               <div className="preferences-rows">
                 <label className="preference-row">
+                  <span>Start with Windows</span>
+                  {toggle("startWithWindows", "Start with Windows")}
+                </label>
+                <label className="preference-row">
                   <span>Start in Tray</span>
                   {toggle("startInTray", "Start in Tray")}
                 </label>
@@ -395,6 +403,10 @@ export function Preferences({
                   </label>
                 ))}
               </div>
+              <p className="preference-note">
+                Approve cleanup once per app session. Closing the dashboard keeps
+                the session active; quitting OpenMemDuct ends it.
+              </p>
             </section>
             <section
               className="preferences-group"

@@ -103,6 +103,7 @@ mod tests {
         .is_err());
         let preferences = serde_json::from_str::<Preferences>(r#"{"startInTray":true}"#).unwrap();
         assert!(preferences.start_in_tray);
+        assert!(!preferences.start_with_windows);
         assert_eq!(
             preferences.cleanup_regions,
             crate::models::default_regions()
@@ -161,6 +162,7 @@ mod tests {
         save(&path, &first).unwrap();
         assert_eq!(load(&path).unwrap(), first);
         let second = Preferences {
+            start_with_windows: true,
             start_in_tray: true,
             cleanup_regions: vec![crate::models::CleanupAction::SystemFileCache],
             ..Default::default()

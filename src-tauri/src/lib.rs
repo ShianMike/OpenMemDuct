@@ -6,6 +6,7 @@ mod elevation;
 mod memory;
 mod models;
 mod settings;
+mod startup;
 #[cfg(windows)]
 mod tray_icon;
 
@@ -29,6 +30,7 @@ struct AppState {
     settings_error: Mutex<Option<String>>,
     settings_path: PathBuf,
     cleanup: Mutex<cleanup::CleanupCoordinator>,
+    helper_session: Mutex<elevation::Session>,
     stopped: AtomicBool,
     bootstrap_count: AtomicUsize,
 }
@@ -86,7 +88,20 @@ async fn save_preferences(
         settings::validate(&preferences)?;
         let previous = state.preferences.lock().map_err(|e| e.to_string())?.clone();
         controls::change_shortcut(&app, &previous, &preferences)?;
-        if let Err(error) = settings::save(&state.settings_path, &preferences) {
+        let startup_changed = previous.start_with_windows != preferences.start_with_windows;
+        let result = (|| {
+            if startup_changed {
+                startup::set_enabled(preferences.start_with_windows)?;
+            }
+            settings::save(&state.settings_path, &preferences)
+        })();
+        if let Err(mut error) = result {
+            if startup_changed {
+                if let Err(rollback) = startup::set_enabled(previous.start_with_windows) {
+                    error = format!("{error}; startup rollback failed: {rollback}");
+                    report_control_error(&app, error.clone());
+                }
+            }
             if let Err(rollback) = controls::change_shortcut(&app, &preferences, &previous) {
                 report_control_error(
                     &app,
@@ -129,15 +144,17 @@ fn start_cleanup(
         let _ = app.emit_to("main", "cleanup:state", &cleanup.state);
     }
     tauri::async_runtime::spawn_blocking(move || {
-        let report = elevation::request(&id, &regions, false, |report| {
-            let state = app.state::<AppState>();
-            if let Ok(mut cleanup) = state.cleanup.lock() {
-                cleanup.state.reports.insert(0, report);
-                cleanup.state.reports.truncate(20);
-                let _ = app.emit_to("main", "cleanup:state", &cleanup.state);
-            };
-        });
         let state = app.state::<AppState>();
+        let report = match state.helper_session.lock() {
+            Ok(mut session) => session.request(&id, &regions, false, |report| {
+                if let Ok(mut cleanup) = state.cleanup.lock() {
+                    cleanup.state.reports.insert(0, report);
+                    cleanup.state.reports.truncate(20);
+                    let _ = app.emit_to("main", "cleanup:state", &cleanup.state);
+                };
+            }),
+            Err(e) => cleanup::empty_report(&id, &regions, CleanupStatus::Failed, e.to_string()),
+        };
         if let Ok(mut cleanup) = state.cleanup.lock() {
             cleanup.state.reports.retain(|r| r.id != report.id);
             cleanup.finish(report.clone());
@@ -248,27 +265,7 @@ pub fn dispatch_cli() -> Option<Result<(), String>> {
         return Some(elevation::parse_helper(&args[1..]).and_then(elevation::helper));
     }
     if cfg!(debug_assertions) && args == ["--helper-self-test"] {
-        let report = elevation::request(
-            "aabbccdd-1122-3344-5566-778899001122",
-            &[
-                CleanupAction::WorkingSet,
-                CleanupAction::SystemFileCache,
-                CleanupAction::ModifiedPageList,
-                CleanupAction::FullStandby,
-                CleanupAction::LowPriorityStandby,
-                CleanupAction::ModifiedFileCache,
-                CleanupAction::RegistryCache,
-                CleanupAction::CombineMemory,
-            ],
-            true,
-            |_| {},
-        );
-        println!("{}", serde_json::to_string_pretty(&report).unwrap());
-        return Some(if report.status == CleanupStatus::Completed {
-            Ok(())
-        } else {
-            Err(report.message)
-        });
+        return Some(elevation::self_test());
     }
     if args == ["--diagnose"] {
         let reading = memory::Sampler::default().sample();
@@ -372,6 +369,7 @@ pub fn run() {
                 settings_error: Mutex::new(settings_error),
                 settings_path: path,
                 cleanup: Mutex::new(cleanup::CleanupCoordinator::default()),
+                helper_session: Mutex::new(elevation::Session::default()),
                 stopped: AtomicBool::new(false),
                 bootstrap_count: AtomicUsize::new(0),
             });
