@@ -1,0 +1,23 @@
+{
+  "startInTray": false,
+  "cleanupRegions": [
+    "workingSet",
+    "systemFileCache",
+    "lowPriorityStandby",
+    "modifiedFileCache",
+    "registryCache",
+    "combineMemory"
+  ],
+  "warningPercent": 70,
+  "dangerPercent": 90,
+  "singleClickAction": "toggleWindow",
+  "middleClickAction": "cleanMemory",
+  "showCleanupResults": true,
+  "notificationSound": true,
+  "autoThresholdEnabled": false,
+  "autoThresholdPercent": 80,
+  "autoIntervalEnabled": false,
+  "autoIntervalMinutes": 90,
+  "hotkeyEnabled": false,
+  "hotkey": "Ctrl+F1"
+}

@@ -1,0 +1,14 @@
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/gen/
+*.tsbuildinfo
+*.local
+.DS_Store
+
+# Local environment and development evidence
+.env
+.env.*
+!.env.example
+/validation/
+/IMPLEMENTATION_PLAN.md

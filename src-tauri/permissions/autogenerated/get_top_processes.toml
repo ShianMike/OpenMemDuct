@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-get-top-processes"
+description = "Enables the get_top_processes command without any pre-configured scope."
+commands.allow = ["get_top_processes"]
+
+[[permission]]
+identifier = "deny-get-top-processes"
+description = "Denies the get_top_processes command without any pre-configured scope."
+commands.deny = ["get_top_processes"]

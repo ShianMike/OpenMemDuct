@@ -1,0 +1,17 @@
+{
+  "identifier": "dashboard",
+  "description": "Local memory dashboard only",
+  "windows": ["main"],
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "core:window:allow-close",
+    "core:window:allow-minimize",
+    "core:window:allow-start-dragging",
+    "allow-get-bootstrap",
+    "allow-get-top-processes",
+    "allow-save-preferences",
+    "allow-request-cleanup",
+    "allow-set-preferences-open"
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "sequence": 42,
+  "timestampMs": 1792911541000,
+  "elapsedMs": 42000,
+  "metrics": {
+    "physicalTotal": 17179869184,
+    "physicalAvailable": 7516192768,
+    "commitUsed": 12884901888,
+    "commitLimit": 25769803776,
+    "systemCache": 2147483648,
+    "kernelPaged": 268435456,
+    "kernelNonpaged": 536870912,
+    "pagefileTotal": 10737418240,
+    "pagefileUsed": 1073741824,
+    "pagefileError": null,
+    "systemWorkingSet": 100663296,
+    "systemWorkingSetPeak": 484442112,
+    "systemWorkingSetError": null,
+    "lowMemory": null
+  },
+  "error": null
+}
