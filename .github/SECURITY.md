@@ -8,7 +8,7 @@ Include the affected version, Windows build, reproduction steps, expected and ac
 
 ## Supported Versions
 
-Security fixes target the latest published prerelease. OpenMemDuct does not yet have a stable release. Cleanup support is currently limited to Windows 11 x64 build 26200.
+Security fixes target the latest published release. Cleanup support is currently limited to Windows 11 x64 build 26200.
 
 ## Security Boundaries
 

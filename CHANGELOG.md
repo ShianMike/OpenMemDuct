@@ -2,7 +2,7 @@
 
 ## 0.1.0 — 2026-10-26
 
-Initial Windows x64 prerelease.
+Initial Windows x64 release.
 
 - Physical Memory, Pagefile, and System Working Set graphs with up to one hour of history.
 - Live physical-memory percentage in the system tray and monitoring while the dashboard is closed.
