@@ -1,6 +1,6 @@
 # Release Preparation
 
-OpenMemDuct is preparing its first public release. The source version is **0.1.0** across npm, Cargo, and Tauri. No versioned installer or published release is claimed by this document.
+The source version is **0.1.0** across npm, Cargo, and Tauri. The [GitHub Releases page](https://github.com/ShianMike/OpenMemDuct/releases) records published builds, their source tags, and their validation limits.
 
 ## Current Scope
 

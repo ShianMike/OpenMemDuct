@@ -4,6 +4,8 @@ OpenMemDuct is a Windows memory monitor and cleanup app built with **React, Taur
 
 Designed for a lightweight tray workflow, it pairs clear memory graphs with a live physical-memory percentage and configurable cleanup operations.
 
+[Download for Windows](https://github.com/ShianMike/OpenMemDuct/releases) · [Report an Issue](https://github.com/ShianMike/OpenMemDuct/issues)
+
 ![OpenMemDuct dashboard showing physical memory, pagefile, and system working set graphs](docs/images/dashboard.jpg)
 
 ## Features
@@ -24,6 +26,8 @@ Designed for a lightweight tray workflow, it pairs clear memory graphs with a li
 Cleanup is currently enabled for **Windows build 26200**. Other builds remain in monitoring mode until their cleanup compatibility is validated.
 
 ## Getting Started
+
+Download the Windows x64 setup EXE from [GitHub Releases](https://github.com/ShianMike/OpenMemDuct/releases), run the installer, and open OpenMemDuct.
 
 1. Open **Preferences → Memory** and choose the regions to clean.
 2. Select **Clean Memory**. Results appear on each graph; select a result label for details.
@@ -48,7 +52,9 @@ See [Contributing](CONTRIBUTING.md) for checks and project structure.
 
 ## Release Status
 
-OpenMemDuct is in pre-release. Installer packaging, installed-app testing, and release performance measurements are pending.
+Version 0.1.0 is a prerelease for Windows 11 x64. Release downloads include the NSIS setup EXE and SHA256SUMS. The installer is unsigned; Windows may display an unknown-publisher warning.
+
+Cleanup remains limited to build 26200. Clean-machine coverage, additional Windows builds, and controlled performance comparisons are ongoing.
 
 See the [changelog](CHANGELOG.md) and [release preparation guide](docs/RELEASING.md) for the current scope and remaining checks.
 
