@@ -152,7 +152,10 @@ fn render(percent: Option<u8>, size: u32) -> Result<Image<'static>, String> {
         if surface.previous_bitmap.is_invalid() {
             return Err("Could not select the tray bitmap".into());
         }
-        for pixel in std::slice::from_raw_parts_mut(bits.cast::<u8>(), length).chunks_exact_mut(4) {
+        for pixel in std::slice::from_raw_parts_mut(bits.cast::<u8>(), length)
+            .as_chunks_mut::<4>()
+            .0
+        {
             pixel.copy_from_slice(&[TILE[2], TILE[1], TILE[0], 0]);
         }
         if SetBkMode(surface.dc, TRANSPARENT) == 0
@@ -167,7 +170,7 @@ fn render(percent: Option<u8>, size: u32) -> Result<Image<'static>, String> {
             .map_err(|e| format!("Could not finish drawing the tray icon: {e}"))?;
         let bgra = std::slice::from_raw_parts(bits.cast::<u8>(), length);
         let radius = side / 6;
-        for (index, pixel) in rgba.chunks_exact_mut(4).enumerate() {
+        for (index, pixel) in rgba.as_chunks_mut::<4>().0.iter_mut().enumerate() {
             let x = index as i32 % side;
             let y = index as i32 / side;
             let dx = x - x.clamp(radius, side - 1 - radius);
@@ -203,9 +206,17 @@ mod tests {
                 for corner in [0, size - 1, size * (size - 1), size * size - 1] {
                     assert_eq!(&pixels[corner as usize * 4..][..4], &[0, 0, 0, 0]);
                 }
-                assert!(pixels.chunks_exact(4).any(|p| p == TILE));
-                assert!(pixels.chunks_exact(4).any(|p| p[0] > 180 && p[3] == 255));
-                assert!(pixels.chunks_exact(4).all(|p| p[3] == 0 || p[3] == 255));
+                assert!(pixels.as_chunks::<4>().0.contains(&TILE));
+                assert!(pixels
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .any(|p| p[0] > 180 && p[3] == 255));
+                assert!(pixels
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .all(|p| p[3] == 0 || p[3] == 255));
             }
         }
         let after = unsafe { GetGuiResources(GetCurrentProcess(), GR_GDIOBJECTS) };
