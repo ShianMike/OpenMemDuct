@@ -61,3 +61,5 @@ See the [changelog](CHANGELOG.md) and [release preparation guide](docs/RELEASING
 ## License
 
 [MIT](LICENSE).
+
+See the [security policy](.github/SECURITY.md) to report a vulnerability privately.

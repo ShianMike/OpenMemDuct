@@ -82,6 +82,14 @@ The helper requests elevation only when necessary. Automatic cleanup runs only i
 
 Keep interface effects brief and finite, and preserve reduced-motion and reduced-transparency fallbacks. Chart gaps, cleanup results, and recorded history should reflect actual readings rather than fabricated interpolation or assumed savings.
 
+## Pull Requests and Security
+
+Use a branch and pull request for changes to `main`. The protected branch requires the GitHub Actions **Source checks** job to pass against an up-to-date base, with review conversations resolved. Version tags cannot be moved or deleted. The manual installer workflow runs only from `main`.
+
+Workflow actions are pinned to reviewed commit SHAs. Keep workflow permissions minimal and do not add credentials to the source tree. Dependabot proposes dependency and action updates for review; it does not merge them automatically.
+
+See the [security policy](.github/SECURITY.md) for private vulnerability reporting.
+
 Use `public/icon.svg` when updating app icons:
 
 ```powershell
