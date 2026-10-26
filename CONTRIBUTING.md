@@ -5,12 +5,12 @@ OpenMemDuct uses React and TypeScript for its interface, Tauri for its desktop s
 ## Prerequisites
 
 - Windows 11 x64.
-- Node.js 24 or newer and npm.
+- Node.js 24.15 or newer on the 24.x line, or Node.js 26 or newer, and npm.
 - Rust 1.97 or newer, using the MSVC toolchain.
 - Visual Studio C++ Build Tools with Desktop development with C++ and a Windows SDK.
 - Microsoft Edge WebView2 Runtime.
 
-See [Tauri's Windows prerequisites](https://v2.tauri.app/start/prerequisites/#windows) for the native dependencies. The current source has been checked with Node.js 24.12.0 and Rust 1.97.0. Keep both dependency lockfiles in source control.
+See [Tauri's Windows prerequisites](https://v2.tauri.app/start/prerequisites/#windows) for the native dependencies. The current source has been checked with Node.js 24.22.1 and Rust 1.97.0. Keep both dependency lockfiles in source control.
 
 ## Run the App
 
