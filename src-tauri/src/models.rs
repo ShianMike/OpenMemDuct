@@ -86,7 +86,9 @@ pub struct MemorySnapshot {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
 pub struct Preferences {
+    pub start_with_windows: bool,
     pub start_in_tray: bool,
+    pub auto_update_enabled: bool,
     #[serde(default = "default_regions")]
     pub cleanup_regions: Vec<CleanupAction>,
     pub warning_percent: u8,
@@ -124,7 +126,9 @@ pub fn default_regions() -> Vec<CleanupAction> {
 impl Default for Preferences {
     fn default() -> Self {
         Self {
+            start_with_windows: false,
             start_in_tray: false,
+            auto_update_enabled: false,
             cleanup_regions: default_regions(),
             warning_percent: 70,
             danger_percent: 90,

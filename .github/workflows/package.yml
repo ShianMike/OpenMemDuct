@@ -15,6 +15,17 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Require updater signing key
+        shell: pwsh
+        env:
+          UPDATER_SIGNING_KEY_CONFIGURED: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
+        run: |
+          if ($env:UPDATER_SIGNING_KEY_CONFIGURED -ne 'true') {
+            throw 'Package requires the TAURI_SIGNING_PRIVATE_KEY secret to sign updater artifacts. Configure it before running this workflow.'
+          }
+      - name: Check updater artifact helper
+        shell: pwsh
+        run: ./scripts/prepare-updater-artifacts.ps1 -SelfCheck
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
@@ -30,20 +41,20 @@ jobs:
       - run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
       - run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
       - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
-      - run: npm run tauri -- build --target x86_64-pc-windows-msvc --bundles nsis --ci
-      - name: Validate installer and generate SHA256SUMS
+      - run: cargo run --locked --manifest-path src-tauri/Cargo.toml --bin openmemduct -- --helper-self-test
+      - name: Build installer and updater signature
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npm run tauri -- build --target x86_64-pc-windows-msvc --bundles nsis --ci
+      - name: Validate updater artifacts and generate manifest and checksums
         id: installer
         shell: pwsh
         run: |
           $bundleDir = 'src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis'
           $version = (Get-Content -LiteralPath src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
           $expectedName = "OpenMemDuct_${version}_x64-setup.exe"
-          $installers = @(Get-ChildItem -LiteralPath $bundleDir -Filter *.exe -File -ErrorAction Stop)
-          if ($installers.Count -ne 1 -or $installers[0].Name -cne $expectedName -or $installers[0].Length -eq 0) {
-            throw "Expected exactly one non-empty NSIS installer: $expectedName"
-          }
-          $hash = (Get-FileHash -LiteralPath $installers[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash  $($installers[0].Name)" | Set-Content -LiteralPath "$bundleDir/SHA256SUMS" -Encoding ascii
+          ./scripts/prepare-updater-artifacts.ps1 -BundleDir $bundleDir -Version $version
           "version=$version" | Add-Content -LiteralPath $env:GITHUB_OUTPUT -Encoding utf8
           "path=$bundleDir/$expectedName" | Add-Content -LiteralPath $env:GITHUB_OUTPUT -Encoding utf8
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -51,5 +62,7 @@ jobs:
           name: OpenMemDuct_${{ steps.installer.outputs.version }}_windows_x64
           path: |
             ${{ steps.installer.outputs.path }}
+            ${{ steps.installer.outputs.path }}.sig
+            src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/latest.json
             src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/SHA256SUMS
           if-no-files-found: error

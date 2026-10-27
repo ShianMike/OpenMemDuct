@@ -26,7 +26,9 @@ export interface MemorySnapshot {
 }
 
 export interface Preferences {
+  startWithWindows: boolean;
   startInTray: boolean;
+  autoUpdateEnabled: boolean;
   cleanupRegions: CleanupAction[];
   warningPercent: number;
   dangerPercent: number;
@@ -189,7 +191,9 @@ export const cleanupOptions: {
   },
 ];
 export const defaultPreferences: Preferences = {
+  startWithWindows: false,
   startInTray: false,
+  autoUpdateEnabled: false,
   warningPercent: 70,
   dangerPercent: 90,
   singleClickAction: "toggleWindow",

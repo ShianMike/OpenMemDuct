@@ -1,5 +1,7 @@
 {
+  "startWithWindows": false,
   "startInTray": false,
+  "autoUpdateEnabled": false,
   "cleanupRegions": [
     "workingSet",
     "systemFileCache",

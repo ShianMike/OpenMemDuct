@@ -13,7 +13,12 @@ type NumberSetting =
   | "dangerPercent"
   | "autoThresholdPercent"
   | "autoIntervalMinutes";
-type ToggleSetting = "startInTray" | "showCleanupResults" | "notificationSound";
+type ToggleSetting =
+  | "startWithWindows"
+  | "startInTray"
+  | "autoUpdateEnabled"
+  | "showCleanupResults"
+  | "notificationSound";
 
 export function Preferences({
   preferences,
@@ -234,6 +239,10 @@ export function Preferences({
               <div className="preferences-group-label">App and Tray</div>
               <div className="preferences-rows">
                 <label className="preference-row">
+                  <span>Start with Windows</span>
+                  {toggle("startWithWindows", "Start with Windows")}
+                </label>
+                <label className="preference-row">
                   <span>Start in Tray</span>
                   {toggle("startInTray", "Start in Tray")}
                 </label>
@@ -294,6 +303,20 @@ export function Preferences({
                   )}
                 </label>
               </div>
+            </section>
+            <section className="preferences-group" aria-label="Updates">
+              <div className="preferences-group-label">Updates</div>
+              <div className="preferences-rows">
+                <label className="preference-row">
+                  <span>Install updates automatically</span>
+                  {toggle("autoUpdateEnabled", "Install updates automatically")}
+                </label>
+              </div>
+              <p className="preference-note">
+                Check GitHub releases when OpenMemDuct starts and every 6 hours.
+                New versions download and install automatically, then restart the
+                app.
+              </p>
             </section>
             {children && <div className="preferences-preview">{children}</div>}
           </>
@@ -395,6 +418,10 @@ export function Preferences({
                   </label>
                 ))}
               </div>
+              <p className="preference-note">
+                Approve cleanup once per app session. Closing the dashboard keeps
+                the session active; quitting OpenMemDuct ends it.
+              </p>
             </section>
             <section
               className="preferences-group"

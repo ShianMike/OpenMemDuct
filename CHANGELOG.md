@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.1 — 2026-10-27
+
+- Optional Start with Windows setting, with registration in Windows Startup Apps.
+- Reuse administrator approval for memory cleanup throughout an app session.
+- Opt-in automatic updates, off by default, with a Tauri updater signature and `latest.json` in the manual packaging artifact. Windows Authenticode signing remains absent; 0.1.0 users need one manual installer upgrade.
+- Improved frosted-glass styling for cleanup detail popovers.
+
+Cleanup remains limited to Windows 11 x64 build 26200. The installer remains unsigned for Windows publisher identity. Artifact checks do not establish successful automatic update installation.
+
 ## 0.1.0 — 2026-10-26
 
 Initial Windows x64 release.

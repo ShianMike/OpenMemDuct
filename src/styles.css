@@ -614,15 +614,16 @@ select:disabled {
   left: 50%;
   transform: translateX(-50%);
   width: 252px;
-  border: 1px solid #ffffffb8;
+  border: 1px solid #ffffffa6;
   border-radius: 16px;
-  background: #ffffffb3;
-  backdrop-filter: blur(24px) saturate(1.3);
-  -webkit-backdrop-filter: blur(24px) saturate(1.3);
+  background: linear-gradient(135deg, #ffffff85, #f4f8fc4d);
+  backdrop-filter: blur(18px) saturate(1.35);
+  -webkit-backdrop-filter: blur(18px) saturate(1.35);
   box-shadow:
-    0 0 0 1px #cdd4df5e,
-    0 10px 32px #1c2a4414,
-    inset 0 1px 0 #ffffffab;
+    0 0 0 1px #cdd4df29,
+    0 4px 12px #1c2a4408,
+    0 16px 36px #1c2a4412,
+    inset 0 1px 0 #ffffffbf;
   padding: 14px 16px;
   font-size: 11px;
   color: #46515c;

@@ -1,8 +1,6 @@
 use crate::{cleanup, models::*};
 
 pub struct HelperArguments {
-    pub id: String,
-    pub regions: Vec<CleanupAction>,
     pub nonce: String,
     pub parent_pid: u32,
     pub parent_created: u64,
@@ -10,33 +8,27 @@ pub struct HelperArguments {
 }
 
 pub fn parse_helper(args: &[String]) -> Result<HelperArguments, String> {
-    if args.len() != 6 && args.len() != 7 {
+    if args.len() != 4 && args.len() != 5 {
         return Err("Invalid helper arguments".into());
     }
-    let regions = cleanup::parse_regions(&args[1])?;
-    if !cleanup::valid_request_id(&args[0])
-        || args[2].len() != 32
-        || !args[2].bytes().all(|b| b.is_ascii_hexdigit())
-    {
+    if args[0].len() != 32 || !args[0].bytes().all(|b| b.is_ascii_hexdigit()) {
         return Err("Invalid helper identifier".into());
     }
-    let parent_pid = args[3]
+    let parent_pid = args[1]
         .parse::<u32>()
         .map_err(|_| "Invalid parent process")?;
-    let parent_created = args[4]
+    let parent_created = args[2]
         .parse::<u64>()
         .map_err(|_| "Invalid parent identity")?;
-    if parent_pid == 0 || parent_created == 0 || args[5] != "v2" {
+    if parent_pid == 0 || parent_created == 0 || args[3] != "v3" {
         return Err("Invalid helper identity or protocol".into());
     }
-    let no_op = args.len() == 7 && args[6] == "--noop" && cfg!(debug_assertions);
-    if args.len() == 7 && !no_op {
+    let no_op = args.len() == 5 && args[4] == "--noop" && cfg!(debug_assertions);
+    if args.len() == 5 && !no_op {
         return Err("Test mode is unavailable".into());
     }
     Ok(HelperArguments {
-        id: args[0].clone(),
-        regions,
-        nonce: args[2].clone(),
+        nonce: args[0].clone(),
         parent_pid,
         parent_created,
         no_op,
@@ -58,6 +50,7 @@ mod platform {
             Foundation::{
                 GetLastError, LocalFree, ERROR_CANCELLED, ERROR_PIPE_CONNECTED,
                 ERROR_PIPE_LISTENING, GENERIC_READ, GENERIC_WRITE, HANDLE, HLOCAL, WAIT_OBJECT_0,
+                WAIT_TIMEOUT,
             },
             Security::{
                 Authorization::{
@@ -86,6 +79,7 @@ mod platform {
                     GetCurrentProcess, GetCurrentProcessId, GetProcessId, GetProcessTimes,
                     OpenProcess, OpenProcessToken, QueryFullProcessImageNameW, WaitForSingleObject,
                     CREATE_NO_WINDOW, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
+                    PROCESS_SYNCHRONIZE,
                 },
             },
             UI::{
@@ -192,14 +186,22 @@ mod platform {
         }
     }
 
-    fn read_bytes(pipe: HANDLE, size: usize, deadline: Instant) -> Result<Vec<u8>, String> {
+    fn read_bytes(
+        pipe: HANDLE,
+        size: usize,
+        deadline: Option<Instant>,
+        parent: Option<HANDLE>,
+    ) -> Result<Vec<u8>, String> {
         if size > MAX_MESSAGE {
             return Err("Helper message is too large".into());
         }
         let mut bytes = vec![0; size];
         let mut offset = 0;
         while offset < size {
-            if Instant::now() >= deadline {
+            if parent.is_some_and(|p| unsafe { WaitForSingleObject(p, 0) } != WAIT_TIMEOUT) {
+                return Err("Parent process exited or could not be checked".into());
+            }
+            if deadline.is_some_and(|d| Instant::now() >= d) {
                 return Err("Helper response timed out; the result is unknown".into());
             }
             let mut available = 0;
@@ -292,107 +294,272 @@ mod platform {
         }
     }
 
-    pub fn request(
-        id: &str,
-        regions: &[CleanupAction],
-        no_op: bool,
-        on_unknown: impl Fn(CleanupReport),
-    ) -> CleanupReport {
-        let fallback = |status, message| cleanup::empty_report(id, regions, status, message);
-        if let Err(e) = cleanup::validate_regions(regions, false) {
-            return fallback(CleanupStatus::Failed, e);
+    #[derive(serde::Serialize, serde::Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct Request {
+        id: String,
+        regions: String,
+    }
+
+    fn validate_request(id: &str, regions: &[CleanupAction]) -> Result<(), String> {
+        if !cleanup::valid_request_id(id) {
+            return Err("Invalid cleanup request identifier".into());
         }
-        let prepare = || -> Result<(Handle, Vec<String>), String> {
-            let mut random = [0u8; 16];
-            unsafe {
-                BCryptGenRandom(None, &mut random, BCRYPT_USE_SYSTEM_PREFERRED_RNG)
-                    .ok()
-                    .map_err(|e| e.to_string())?;
+        cleanup::validate_regions(regions, false)
+    }
+
+    pub fn parse_request(bytes: &[u8]) -> Result<(String, Vec<CleanupAction>), String> {
+        if bytes.len() > MAX_MESSAGE {
+            return Err("Helper request exceeds size limit".into());
+        }
+        let request: Request = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
+        let regions = cleanup::parse_regions(&request.regions)?;
+        validate_request(&request.id, &regions)?;
+        Ok((request.id, regions))
+    }
+
+    fn write_packet(pipe: HANDLE, bytes: &[u8]) -> Result<(), String> {
+        if bytes.is_empty() || bytes.len() > MAX_MESSAGE {
+            return Err("Invalid helper message size".into());
+        }
+        let mut packet = (bytes.len() as u32).to_le_bytes().to_vec();
+        packet.extend(bytes);
+        write_bytes(pipe, &packet)
+    }
+
+    fn read_packet(
+        pipe: HANDLE,
+        deadline: Option<Instant>,
+        parent: Option<HANDLE>,
+    ) -> Result<Vec<u8>, String> {
+        // Only the idle first byte may wait indefinitely; partial frames have a deadline.
+        let mut length = read_bytes(pipe, 1, deadline, parent)?;
+        let deadline = deadline.unwrap_or_else(|| Instant::now() + Duration::from_secs(30));
+        length.extend(read_bytes(pipe, 3, Some(deadline), parent)?);
+        let length = u32::from_le_bytes(length.try_into().map_err(|_| "Invalid message size")?);
+        if length == 0 {
+            return Err("Empty helper message".into());
+        }
+        read_bytes(pipe, length as usize, Some(deadline), parent)
+    }
+
+    struct Connection {
+        pipe: Option<Handle>,
+        child: Launched,
+        no_op: bool,
+        connected: bool,
+    }
+
+    impl Drop for Connection {
+        fn drop(&mut self) {
+            // Disconnect first so an idle helper exits; an outstanding operation must finish.
+            self.pipe.take();
+            while unsafe { WaitForSingleObject(self.child.handle(), 1000) } != WAIT_OBJECT_0 {}
+        }
+    }
+
+    #[derive(Default)]
+    pub struct Session {
+        connection: Option<Connection>,
+    }
+
+    impl Session {
+        fn launch(&mut self, no_op: bool) -> Result<(), (CleanupStatus, String)> {
+            let prepare = || -> Result<(Handle, Vec<String>), String> {
+                let mut random = [0u8; 16];
+                unsafe {
+                    BCryptGenRandom(None, &mut random, BCRYPT_USE_SYSTEM_PREFERRED_RNG)
+                        .ok()
+                        .map_err(|e| e.to_string())?;
+                }
+                let nonce = random
+                    .iter()
+                    .map(|b| format!("{b:02x}"))
+                    .collect::<String>();
+                let pipe = server(&nonce)?;
+                let mut args = vec![
+                    nonce,
+                    unsafe { GetCurrentProcessId() }.to_string(),
+                    process_created(unsafe { GetCurrentProcess() })?.to_string(),
+                    "v3".into(),
+                ];
+                if no_op {
+                    args.push("--noop".into());
+                }
+                Ok((pipe, args))
+            };
+            let (pipe, args) = prepare().map_err(|e| (CleanupStatus::Failed, e))?;
+            let child = launch(&args, no_op)?;
+            self.connection = Some(Connection {
+                pipe: Some(pipe),
+                child,
+                no_op,
+                connected: false,
+            });
+            Ok(())
+        }
+
+        pub fn request(
+            &mut self,
+            id: &str,
+            regions: &[CleanupAction],
+            no_op: bool,
+            on_unknown: impl Fn(CleanupReport),
+        ) -> CleanupReport {
+            let fallback = |status, message| cleanup::empty_report(id, regions, status, message);
+            if let Err(e) = validate_request(id, regions) {
+                return fallback(CleanupStatus::Failed, e);
             }
-            let nonce = random
-                .iter()
-                .map(|b| format!("{b:02x}"))
-                .collect::<String>();
-            let pipe = server(&nonce)?;
-            let mut args = vec![
-                id.into(),
-                cleanup::encode_regions(regions),
-                nonce,
-                unsafe { GetCurrentProcessId() }.to_string(),
-                process_created(unsafe { GetCurrentProcess() })?.to_string(),
-                "v2".into(),
-            ];
-            if no_op {
-                args.push("--noop".into());
+            if no_op && !cfg!(debug_assertions) {
+                return fallback(CleanupStatus::Failed, "Test mode is unavailable".into());
             }
-            Ok((pipe, args))
-        };
-        let (pipe, args) = match prepare() {
-            Ok(p) => p,
-            Err(e) => return fallback(CleanupStatus::Failed, e),
-        };
-        let child = match launch(&args, no_op) {
-            Ok(child) => child,
-            Err((status, e)) => return fallback(status, e),
-        };
-        let deadline = Instant::now() + Duration::from_secs(30);
-        let exchange = || -> Result<CleanupReport, String> {
-            unsafe {
-                loop {
-                    match ConnectNamedPipe(pipe.0, None) {
-                        Ok(()) => break,
-                        Err(e) => {
-                            let code = GetLastError();
-                            if code == ERROR_PIPE_CONNECTED {
-                                break;
-                            } else if code != ERROR_PIPE_LISTENING {
-                                return Err(e.to_string());
+            if self.connection.as_ref().is_some_and(|c| {
+                (unsafe { WaitForSingleObject(c.child.handle(), 0) }) == WAIT_OBJECT_0
+            }) {
+                self.connection.take();
+            }
+            if self.connection.as_ref().is_some_and(|c| c.no_op != no_op) {
+                return fallback(CleanupStatus::Failed, "Helper session mode differs".into());
+            }
+            if self.connection.is_none() {
+                if let Err((status, e)) = self.launch(no_op) {
+                    return fallback(status, e);
+                }
+            }
+            let connection = self.connection.as_mut().unwrap();
+            let pipe = connection.pipe.as_ref().unwrap().0;
+            let deadline = Instant::now() + Duration::from_secs(30);
+            let mut exchange = || -> Result<CleanupReport, String> {
+                unsafe {
+                    if !connection.connected {
+                        loop {
+                            match ConnectNamedPipe(pipe, None) {
+                                Ok(()) => break,
+                                Err(e) => {
+                                    let code = GetLastError();
+                                    if code == ERROR_PIPE_CONNECTED {
+                                        break;
+                                    } else if code != ERROR_PIPE_LISTENING {
+                                        return Err(e.to_string());
+                                    }
+                                }
                             }
+                            if Instant::now() >= deadline {
+                                return Err("Helper connection timed out; result unknown".into());
+                            }
+                            if WaitForSingleObject(connection.child.handle(), 0) == WAIT_OBJECT_0 {
+                                return Err("Helper exited without a result".into());
+                            }
+                            std::thread::sleep(Duration::from_millis(25));
                         }
                     }
-                    if Instant::now() >= deadline {
-                        return Err("Helper connection timed out; result unknown".into());
+                    let mut client = 0;
+                    GetNamedPipeClientProcessId(pipe, &mut client).map_err(|e| e.to_string())?;
+                    if client != GetProcessId(connection.child.handle()) {
+                        return Err("Unexpected helper process".into());
                     }
-                    if WaitForSingleObject(child.handle(), 0) == WAIT_OBJECT_0 {
-                        return Err("Helper exited without a result".into());
+                    if !connection.connected {
+                        write_bytes(pipe, b"1")?;
+                        connection.connected = true;
                     }
-                    std::thread::sleep(Duration::from_millis(25));
                 }
-                let mut client = 0;
-                GetNamedPipeClientProcessId(pipe.0, &mut client).map_err(|e| e.to_string())?;
-                if client != GetProcessId(child.handle()) {
-                    return Err("Unexpected helper process".into());
-                }
-                write_bytes(pipe.0, b"1")?;
-                let length = read_bytes(pipe.0, 4, deadline)?;
-                let length =
-                    u32::from_le_bytes(length.try_into().map_err(|_| "Invalid message size")?)
-                        as usize;
-                let bytes = read_bytes(pipe.0, length, deadline)?;
+                let bytes = serde_json::to_vec(&Request {
+                    id: id.into(),
+                    regions: cleanup::encode_regions(regions),
+                })
+                .map_err(|e| e.to_string())?;
+                write_packet(pipe, &bytes)?;
+                let bytes = read_packet(pipe, Some(deadline), None)?;
                 let report = validate_report(&bytes, id, regions)?;
-                write_bytes(pipe.0, b"2")?;
+                write_bytes(pipe, b"2")?;
                 Ok(report)
+            };
+            match exchange() {
+                Ok(report) => report,
+                Err(e) => {
+                    let report = fallback(CleanupStatus::Unknown, e);
+                    let mut connection = self.connection.take().unwrap();
+                    connection.pipe.take();
+                    on_unknown(report.clone());
+                    // Drop waits for completion before the caller can release its busy guard.
+                    drop(connection);
+                    report
+                }
             }
-        };
-        let report = match exchange() {
-            Ok(report) => report,
-            Err(e) => fallback(CleanupStatus::Unknown, e),
-        };
-        // A timed-out operation may still be running; retain the concurrency guard until the child exits.
-        if unsafe { WaitForSingleObject(child.handle(), 0) } != WAIT_OBJECT_0 {
-            if report.status == CleanupStatus::Unknown {
-                on_unknown(report.clone());
-            }
-            while unsafe { WaitForSingleObject(child.handle(), 1000) } != WAIT_OBJECT_0 {}
         }
-        report
+    }
+
+    pub fn self_test() -> Result<(), String> {
+        if !cfg!(debug_assertions) {
+            return Err("Test mode is unavailable".into());
+        }
+        let mut session = Session::default();
+        let first = session.request(
+            "aabbccdd-1122-3344-5566-778899001122",
+            &[
+                CleanupAction::WorkingSet,
+                CleanupAction::SystemFileCache,
+                CleanupAction::ModifiedPageList,
+                CleanupAction::FullStandby,
+                CleanupAction::LowPriorityStandby,
+                CleanupAction::ModifiedFileCache,
+                CleanupAction::RegistryCache,
+                CleanupAction::CombineMemory,
+            ],
+            true,
+            |_| {},
+        );
+        let first_pid = session
+            .connection
+            .as_ref()
+            .map(|c| unsafe { GetProcessId(c.child.handle()) });
+        let second = session.request(
+            "aabbccdd-1122-3344-5566-778899001123",
+            &[CleanupAction::LowPriorityStandby, CleanupAction::WorkingSet],
+            true,
+            |_| {},
+        );
+        let second_pid = session
+            .connection
+            .as_ref()
+            .map(|c| unsafe { GetProcessId(c.child.handle()) });
+        let reused = first_pid.is_some_and(|pid| pid != 0) && first_pid == second_pid;
+        let exited = session.connection.take().is_some_and(|mut c| {
+            let alive = unsafe { WaitForSingleObject(c.child.handle(), 0) } == WAIT_TIMEOUT;
+            c.pipe.take();
+            alive && (unsafe { WaitForSingleObject(c.child.handle(), 5000) }) == WAIT_OBJECT_0
+        });
+        let passed = reused
+            && exited
+            && first.status == CleanupStatus::Completed
+            && second.status == CleanupStatus::Completed;
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "status": if passed { "completed" } else { "failed" },
+                "reports": [first, second],
+                "helperPids": [first_pid, second_pid],
+                "helperReused": reused,
+                "helperExitedOnDisconnect": exited,
+            }))
+            .map_err(|e| e.to_string())?
+        );
+        if passed {
+            Ok(())
+        } else {
+            Err("Helper session self-test failed".into())
+        }
     }
 
     pub fn helper(args: HelperArguments) -> Result<(), String> {
         unsafe {
             let parent = Handle(
-                OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, args.parent_pid)
-                    .map_err(|e| e.to_string())?,
+                OpenProcess(
+                    PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_SYNCHRONIZE,
+                    false,
+                    args.parent_pid,
+                )
+                .map_err(|e| e.to_string())?,
             );
             if process_created(parent.0)? != args.parent_created {
                 return Err("Parent identity changed".into());
@@ -432,23 +599,42 @@ mod platform {
             if server_pid != args.parent_pid {
                 return Err("Unexpected result server".into());
             }
-            let ready = read_bytes(pipe.0, 1, Instant::now() + Duration::from_secs(10))?;
+            let ready = read_bytes(
+                pipe.0,
+                1,
+                Some(Instant::now() + Duration::from_secs(10)),
+                Some(parent.0),
+            )?;
             if ready != b"1" {
                 return Err("Invalid helper handshake".into());
             }
-            let report = cleanup::perform(&args.id, &args.regions, args.no_op);
-            let bytes = serde_json::to_vec(&report).map_err(|e| e.to_string())?;
-            if bytes.len() > MAX_MESSAGE {
-                return Err("Helper result exceeds size limit".into());
+            loop {
+                let bytes = match read_packet(pipe.0, None, Some(parent.0)) {
+                    Ok(bytes) => bytes,
+                    Err(error) => {
+                        if WaitForSingleObject(parent.0, 0) != WAIT_TIMEOUT
+                            || PeekNamedPipe(pipe.0, None, 0, None, None, None).is_err()
+                        {
+                            return Ok(());
+                        }
+                        return Err(error);
+                    }
+                };
+                // Every request uses the fixed allowlist; test mode is set only at launch.
+                let (id, regions) = parse_request(&bytes)?;
+                let report = cleanup::perform(&id, &regions, args.no_op);
+                let bytes = serde_json::to_vec(&report).map_err(|e| e.to_string())?;
+                write_packet(pipe.0, &bytes)?;
+                if read_bytes(
+                    pipe.0,
+                    1,
+                    Some(Instant::now() + Duration::from_secs(10)),
+                    Some(parent.0),
+                )? != b"2"
+                {
+                    return Err("Invalid result acknowledgement".into());
+                }
             }
-            let mut packet = (bytes.len() as u32).to_le_bytes().to_vec();
-            packet.extend(bytes);
-            write_bytes(pipe.0, &packet)?;
-            // Keep the pipe alive until the parent acknowledges consumption.
-            if read_bytes(pipe.0, 1, Instant::now() + Duration::from_secs(10))? != b"2" {
-                return Err("Invalid result acknowledgement".into());
-            }
-            Ok(())
         }
     }
 
@@ -494,35 +680,117 @@ mod platform {
         }
         Ok(report)
     }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn rejects_invalid_frames_and_detects_disconnect() {
+            let nonce = format!("{:?}", windows::core::GUID::new().unwrap());
+            let server = server(&nonce).unwrap();
+            let name = pipe_name(&nonce);
+            let client = Handle(unsafe {
+                CreateFileW(
+                    PCWSTR(name.as_ptr()),
+                    GENERIC_READ.0 | GENERIC_WRITE.0,
+                    FILE_SHARE_NONE,
+                    None,
+                    OPEN_EXISTING,
+                    SECURITY_SQOS_PRESENT | SECURITY_IDENTIFICATION,
+                    None,
+                )
+                .unwrap()
+            });
+            for size in [0, MAX_MESSAGE as u32 + 1, u32::MAX] {
+                write_bytes(client.0, &size.to_le_bytes()).unwrap();
+                assert!(read_packet(
+                    server.0,
+                    Some(Instant::now() + Duration::from_secs(1)),
+                    None
+                )
+                .is_err());
+            }
+            assert!(write_packet(client.0, &[]).is_err());
+            assert!(write_packet(client.0, &vec![0; MAX_MESSAGE + 1]).is_err());
+            write_packet(client.0, b"{}").unwrap();
+            let bytes = read_packet(
+                server.0,
+                Some(Instant::now() + Duration::from_secs(1)),
+                None,
+            )
+            .unwrap();
+            assert!(parse_request(&bytes).is_err());
+            drop(client);
+            assert!(read_packet(
+                server.0,
+                Some(Instant::now() + Duration::from_secs(1)),
+                None
+            )
+            .is_err());
+        }
+    }
 }
 
 #[cfg(windows)]
-pub use platform::{helper, request};
+pub use platform::{helper, self_test, Session};
 
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
     fn strict_helper_parser() {
-        let args = [
-            "aabbccdd-1122-3344-5566-778899001122",
-            "2",
-            "11223344556677889900112233445566",
-            "123",
-            "456",
-            "v2",
-        ]
-        .map(str::to_owned);
+        let args = ["11223344556677889900112233445566", "123", "456", "v3"].map(str::to_owned);
         assert!(parse_helper(&args).is_ok());
         let mut bad = args.clone();
-        bad[1] = "anything".into();
+        bad[1] = "0".into();
         assert!(parse_helper(&bad).is_err());
         let mut bad = args.clone();
-        bad[2] = "../arbitrary-pipe".into();
+        bad[0] = "../arbitrary-pipe".into();
         assert!(parse_helper(&bad).is_err());
         let mut bad = args.to_vec();
         bad.push("--other".into());
         assert!(parse_helper(&bad).is_err());
+        for (index, value) in [(1, "other"), (2, "0"), (2, "-1"), (3, "v2")] {
+            let mut bad = args.clone();
+            bad[index] = value.into();
+            assert!(parse_helper(&bad).is_err());
+        }
+        let mut test = args.to_vec();
+        test.push("--noop".into());
+        assert_eq!(parse_helper(&test).is_ok(), cfg!(debug_assertions));
+        assert!(!parse_helper(&args).unwrap().no_op);
+        assert!(parse_helper(&args[..3]).is_err());
+    }
+    #[test]
+    #[cfg(windows)]
+    fn strict_session_request_parser() {
+        let id = "aabbccdd-1122-3344-5566-778899001122";
+        let valid = serde_json::json!({ "id": id, "regions": "6,7,0,1,2,3,4,5" });
+        let bytes = serde_json::to_vec(&valid).unwrap();
+        let (parsed_id, regions) = platform::parse_request(&bytes).unwrap();
+        assert_eq!(parsed_id, id);
+        assert_eq!(regions.len(), 8);
+        for bad_regions in ["", "2,2", "8", "-1", "2,", "02", "2,0,1,2,3,4,5,6,7"] {
+            let mut bad = valid.clone();
+            bad["regions"] = bad_regions.into();
+            assert!(platform::parse_request(&serde_json::to_vec(&bad).unwrap()).is_err());
+        }
+        for extra in ["no_op", "noOp", "nonce", "parent_pid"] {
+            let mut bad = valid.clone();
+            bad[extra] = true.into();
+            assert!(platform::parse_request(&serde_json::to_vec(&bad).unwrap()).is_err());
+        }
+        for bad in [
+            br#"{"id":"bad","regions":"2"}"#.as_slice(),
+            br#"{"id":"aabbccdd-1122-3344-5566-778899001122","regions":[]}"#,
+            br#"{"regions":"2"}"#,
+            br#"{"id":"aabbccdd-1122-3344-5566-778899001122","regions":"2","regions":"1"}"#,
+            b"{} trailing",
+            &vec![b' '; 16385],
+        ] {
+            assert!(platform::parse_request(bad).is_err());
+        }
     }
     #[test]
     #[cfg(windows)]
