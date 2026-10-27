@@ -88,6 +88,7 @@ pub struct MemorySnapshot {
 pub struct Preferences {
     pub start_with_windows: bool,
     pub start_in_tray: bool,
+    pub auto_update_enabled: bool,
     #[serde(default = "default_regions")]
     pub cleanup_regions: Vec<CleanupAction>,
     pub warning_percent: u8,
@@ -127,6 +128,7 @@ impl Default for Preferences {
         Self {
             start_with_windows: false,
             start_in_tray: false,
+            auto_update_enabled: false,
             cleanup_regions: default_regions(),
             warning_percent: 70,
             danger_percent: 90,

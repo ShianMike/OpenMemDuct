@@ -194,6 +194,17 @@ describe("minimal dashboard", () => {
       expect(backend.setPreferencesOpen).toHaveBeenLastCalledWith(false),
     );
   });
+  it("keeps preferences closed when the native updater has committed installation", async () => {
+    const backend = createDemoBackend();
+    backend.setPreferencesOpen = vi.fn(async (open) => {
+      if (open) throw new Error("An update is being installed.");
+    });
+    render(<App backend={backend} store={createTelemetryStore(backend)} />);
+    await screen.findByRole("region", { name: "Physical Memory" });
+    fireEvent.click(screen.getByRole("button", { name: "Open Preferences" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("An update is being installed.");
+    expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();
+  });
   it("renders exactly three independent graph categories without page headings", async () => {
     setup();
     await screen.findByRole("region", { name: "Physical Memory" });

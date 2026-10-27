@@ -9,6 +9,7 @@ mod settings;
 mod startup;
 #[cfg(windows)]
 mod tray_icon;
+mod updater;
 
 use models::*;
 use std::{
@@ -31,6 +32,8 @@ struct AppState {
     settings_path: PathBuf,
     cleanup: Mutex<cleanup::CleanupCoordinator>,
     helper_session: Mutex<elevation::Session>,
+    update_running: AtomicBool,
+    installing_update: AtomicBool,
     stopped: AtomicBool,
     bootstrap_count: AtomicUsize,
 }
@@ -73,8 +76,13 @@ async fn get_top_processes() -> Result<ProcessList, String> {
 }
 
 #[tauri::command]
-fn set_preferences_open(state: tauri::State<'_, AppState>, open: bool) {
+fn set_preferences_open(state: tauri::State<'_, AppState>, open: bool) -> Result<(), String> {
+    let _guard = state.settings_update.lock().map_err(|e| e.to_string())?;
+    if open && state.installing_update.load(Ordering::SeqCst) {
+        return Err("An update is being installed. OpenMemDuct will restart shortly.".into());
+    }
     state.preferences_open.store(open, Ordering::Relaxed);
+    Ok(())
 }
 
 #[tauri::command]
@@ -85,6 +93,9 @@ async fn save_preferences(
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
         let _guard = state.settings_update.lock().map_err(|e| e.to_string())?;
+        if state.installing_update.load(Ordering::SeqCst) {
+            return Err("An update is being installed. OpenMemDuct will restart shortly.".into());
+        }
         settings::validate(&preferences)?;
         let previous = state.preferences.lock().map_err(|e| e.to_string())?.clone();
         controls::change_shortcut(&app, &previous, &preferences)?;
@@ -140,6 +151,9 @@ fn start_cleanup(
     {
         let state = app.state::<AppState>();
         let mut cleanup = state.cleanup.lock().map_err(|e| e.to_string())?;
+        if state.installing_update.load(Ordering::SeqCst) {
+            return Err("An update is being installed. OpenMemDuct will restart shortly.".into());
+        }
         cleanup.begin(&id)?;
         let _ = app.emit_to("main", "cleanup:state", &cleanup.state);
     }
@@ -278,7 +292,9 @@ pub fn dispatch_cli() -> Option<Result<(), String>> {
     }
     if args.is_empty()
         || args == ["--tray"]
-        || (cfg!(debug_assertions) && args == ["--validate-lifecycle"])
+        || (cfg!(debug_assertions)
+            && (args == ["--validate-lifecycle"]
+                || (args.len() == 3 && args[0] == "--updater-self-test")))
     {
         None
     } else {
@@ -287,7 +303,8 @@ pub fn dispatch_cli() -> Option<Result<(), String>> {
 }
 
 fn validation_mode() -> bool {
-    cfg!(debug_assertions) && std::env::args().any(|a| a == "--validate-lifecycle")
+    cfg!(debug_assertions)
+        && std::env::args().any(|a| a == "--validate-lifecycle" || a == "--updater-self-test")
 }
 
 pub fn run() {
@@ -306,6 +323,7 @@ pub fn run() {
             }
         })
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, shortcut, event| {
@@ -370,6 +388,8 @@ pub fn run() {
                 settings_path: path,
                 cleanup: Mutex::new(cleanup::CleanupCoordinator::default()),
                 helper_session: Mutex::new(elevation::Session::default()),
+                update_running: AtomicBool::new(false),
+                installing_update: AtomicBool::new(false),
                 stopped: AtomicBool::new(false),
                 bootstrap_count: AtomicUsize::new(0),
             });
@@ -435,6 +455,7 @@ pub fn run() {
                 #[cfg(windows)]
                 let mut last_percentage = first_usage.map(|p| p.round() as u8);
                 let mut automation = controls::AutoCleaner::default();
+                let mut updates = updater::Schedule::default();
                 let automatic_allowed = controls::is_elevated()
                     && cleanup::capabilities().cleanup_supported
                     && !validation_mode();
@@ -523,11 +544,29 @@ pub fn run() {
                     ) {
                         trigger_action(&handle, TrayAction::CleanMemory);
                     }
+                    if !cfg!(debug_assertions)
+                        && updates.due(preferences.auto_update_enabled, std::time::Instant::now())
+                    {
+                        updater::start(handle.clone());
+                    }
                     std::thread::sleep(Duration::from_secs(if visible || fast { 1 } else { 5 }));
                 }
             });
             if validation_mode() {
                 let handle = app.handle().clone();
+                #[cfg(debug_assertions)]
+                if std::env::args().any(|a| a == "--updater-self-test") {
+                    std::thread::spawn(move || {
+                        let args: Vec<_> = std::env::args().collect();
+                        if let Err(error) = updater::self_test(&handle, &args[2], &args[3]) {
+                            eprintln!("Updater validation failed: {error}");
+                            handle.exit(1);
+                        } else {
+                            handle.exit(0);
+                        }
+                    });
+                    return Ok(());
+                }
                 std::thread::spawn(move || {
                     if let Err(error) = diagnostics::validate_lifecycle(&handle) {
                         eprintln!("Native validation failed: {error}");

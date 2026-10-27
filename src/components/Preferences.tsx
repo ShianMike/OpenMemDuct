@@ -16,6 +16,7 @@ type NumberSetting =
 type ToggleSetting =
   | "startWithWindows"
   | "startInTray"
+  | "autoUpdateEnabled"
   | "showCleanupResults"
   | "notificationSound";
 
@@ -302,6 +303,20 @@ export function Preferences({
                   )}
                 </label>
               </div>
+            </section>
+            <section className="preferences-group" aria-label="Updates">
+              <div className="preferences-group-label">Updates</div>
+              <div className="preferences-rows">
+                <label className="preference-row">
+                  <span>Install updates automatically</span>
+                  {toggle("autoUpdateEnabled", "Install updates automatically")}
+                </label>
+              </div>
+              <p className="preference-note">
+                Check GitHub releases when OpenMemDuct starts and every 6 hours.
+                New versions download and install automatically, then restart the
+                app.
+              </p>
             </section>
             {children && <div className="preferences-preview">{children}</div>}
           </>

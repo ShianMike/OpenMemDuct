@@ -97,6 +97,7 @@ mod tests {
     #[test]
     fn rejects_unknown_fields_and_invalid_values() {
         assert!(serde_json::from_str::<Preferences>(r#"{"startInTray":"yes"}"#).is_err());
+        assert!(serde_json::from_str::<Preferences>(r#"{"autoUpdateEnabled":"yes"}"#).is_err());
         assert!(serde_json::from_str::<Preferences>(
             r#"{"startInTray":false,"command":"anything"}"#
         )
@@ -104,6 +105,7 @@ mod tests {
         let preferences = serde_json::from_str::<Preferences>(r#"{"startInTray":true}"#).unwrap();
         assert!(preferences.start_in_tray);
         assert!(!preferences.start_with_windows);
+        assert!(!preferences.auto_update_enabled);
         assert_eq!(
             preferences.cleanup_regions,
             crate::models::default_regions()
@@ -114,6 +116,12 @@ mod tests {
         assert_eq!(
             serde_json::to_value(Preferences::default()).unwrap(),
             expected
+        );
+        let mut legacy = expected;
+        legacy.as_object_mut().unwrap().remove("autoUpdateEnabled");
+        assert_eq!(
+            serde_json::from_value::<Preferences>(legacy).unwrap(),
+            Preferences::default()
         );
         assert!(validate(&Preferences {
             warning_percent: 90,
@@ -164,6 +172,7 @@ mod tests {
         let second = Preferences {
             start_with_windows: true,
             start_in_tray: true,
+            auto_update_enabled: true,
             cleanup_regions: vec![crate::models::CleanupAction::SystemFileCache],
             ..Default::default()
         };
