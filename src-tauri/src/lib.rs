@@ -75,7 +75,7 @@ async fn get_top_processes() -> Result<ProcessList, String> {
         .map_err(|e| e.to_string())?
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn set_preferences_open(state: tauri::State<'_, AppState>, open: bool) -> Result<(), String> {
     let _guard = state.settings_update.lock().map_err(|e| e.to_string())?;
     if open && state.installing_update.load(Ordering::SeqCst) {
