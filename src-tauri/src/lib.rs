@@ -399,6 +399,14 @@ pub fn run() {
                 .lock()
                 .map_err(|e| e.to_string())?
                 .clone();
+            if !cfg!(debug_assertions) {
+                if let Err(error) = startup::set_enabled(saved.start_with_windows) {
+                    report_control_error(
+                        app.handle(),
+                        format!("Could not restore Windows startup: {error}"),
+                    );
+                }
+            }
             if let Err(error) =
                 controls::change_shortcut(app.handle(), &Preferences::default(), &saved)
             {
