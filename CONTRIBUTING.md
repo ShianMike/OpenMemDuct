@@ -1,6 +1,6 @@
 # Contributing
 
-OpenMemDuct uses React and TypeScript for its interface, Tauri for its desktop shell, and Rust for Windows memory sampling, tray updates, settings, startup, cleanup, and automatic updates. The 0.1.1 scope includes Start with Windows, cleanup approval reused throughout an app session, opt-in updates, and improved frost on cleanup detail popovers.
+OpenMemDuct uses React and TypeScript for its interface, Tauri for its desktop shell, and Rust for Windows memory sampling, tray updates, settings, startup, cleanup, and automatic updates. The 0.1.2 scope is tray-menu Clean memory using saved cleanup regions and the running App version under Preferences → General → Updates.
 
 ## Prerequisites
 
@@ -10,7 +10,7 @@ OpenMemDuct uses React and TypeScript for its interface, Tauri for its desktop s
 - Visual Studio C++ Build Tools with Desktop development with C++ and a Windows SDK.
 - Microsoft Edge WebView2 Runtime.
 
-See [Tauri's Windows prerequisites](https://v2.tauri.app/start/prerequisites/#windows) for the native dependencies. The current source has been checked with Node.js 24.22.1 and Rust 1.97.0. Keep both dependency lockfiles in source control.
+See [Tauri's Windows prerequisites](https://v2.tauri.app/start/prerequisites/#windows) for the native dependencies. Keep both dependency lockfiles in source control.
 
 ## Run the App
 
@@ -51,7 +51,7 @@ cargo test --locked --manifest-path src-tauri/Cargo.toml
 
 The frontend build produces web assets. It does not package an application or installer. Native unit tests use read-only counters and no-op cleanup paths; they do not clear the workstation's memory. The Windows Checks workflow runs the same source and test lanes.
 
-Record results against the exact 0.1.1 release commit. Local checks, hosted CI, and packaged-app runtime checks need separate evidence; the updater artifact self-check does not prove automatic update installation. See [Releasing](docs/RELEASING.md) for the release gates and evidence required before publication.
+Record results against the exact 0.1.2 release commit. Local checks, hosted CI, and packaged-app runtime checks need separate evidence; the updater artifact self-check does not prove automatic update installation. See [Releasing](docs/RELEASING.md) for the release gates and evidence required before publication.
 
 Read-only diagnostics and the no-op helper transport check are also available:
 
@@ -92,7 +92,7 @@ Cleanup is restricted to Windows 11 x64 build family 26200. Some operations use 
 
 The first manual cleanup requests elevation when necessary and keeps an authenticated cleanup helper for the app session. Closing the dashboard leaves that session available; quitting the app closes it. Automatic cleanup runs only in an already elevated session on a supported build. Global shortcuts pause while Preferences is open. Settings changes are validated and saved together; a failed save preserves the previous file.
 
-Start with Windows registers the current user's startup entry and is managed through Preferences and Windows Startup Apps. Automatic updates are opt-in (`autoUpdateEnabled`, off by default) and use the native Tauri updater with signature and signed-version checks. Keep updater signing separate from Windows Authenticode publisher signing. Users of the original 0.1.0 installer must install 0.1.1 manually once before receiving subsequent automatic updates.
+Start with Windows registers the current user's startup entry and is managed through Preferences and Windows Startup Apps. Automatic updates are opt-in (`autoUpdateEnabled`, off by default), were introduced in 0.1.1, and use the native Tauri updater with signature and signed-version checks. Keep updater signing separate from Windows Authenticode publisher signing. Users of the original 0.1.0 installer must install 0.1.1 or a later release manually once before receiving subsequent automatic updates.
 
 Keep interface effects brief and finite, and preserve reduced-motion and reduced-transparency fallbacks. Chart gaps, cleanup results, and recorded history should reflect actual readings rather than fabricated interpolation or assumed savings.
 

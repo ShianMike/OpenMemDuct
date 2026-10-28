@@ -413,8 +413,10 @@ pub fn run() {
                 report_control_error(app.handle(), error);
             }
             let open = tauri::menu::MenuItem::with_id(app, "open", "Open", true, None::<&str>)?;
+            let clean =
+                tauri::menu::MenuItem::with_id(app, "clean", "Clean memory", true, None::<&str>)?;
             let quit = tauri::menu::MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-            let menu = tauri::menu::Menu::with_items(app, &[&open, &quit])?;
+            let menu = tauri::menu::Menu::with_items(app, &[&open, &clean, &quit])?;
             let tray = tauri::tray::TrayIconBuilder::with_id("memory")
                 .icon(first_icon)
                 .tooltip("OpenMemDuct")
@@ -424,6 +426,7 @@ pub fn run() {
                     "open" => {
                         let _ = open_dashboard(app);
                     }
+                    "clean" => trigger_action(app, TrayAction::CleanMemory),
                     "quit" => app.exit(0),
                     _ => {}
                 })

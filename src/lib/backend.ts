@@ -1,3 +1,4 @@
+import { getVersion } from "@tauri-apps/api/app";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type {
@@ -18,6 +19,7 @@ export async function createBackend(): Promise<Backend> {
     throw new Error("Open this dashboard in the OpenMemDuct desktop app.");
   }
   return {
+    appVersion: await getVersion(),
     bootstrap: () => invoke<Bootstrap>("get_bootstrap"),
     onSnapshot: async (callback) =>
       listen<MemorySnapshot>("memory:snapshot", (event) =>

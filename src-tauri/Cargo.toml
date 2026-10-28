@@ -1,6 +1,6 @@
 [package]
 name = "openmemduct"
-version = "0.1.1"
+version = "0.1.2"
 description = "A Windows memory monitor and cleanup app built with React, Tauri, and Rust"
 authors = ["OpenMemDuct contributors"]
 edition = "2021"
