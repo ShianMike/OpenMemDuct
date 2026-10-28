@@ -1,3 +1,4 @@
+import { version } from "../../package.json";
 import { GiB } from "../lib/format";
 import { defaultPreferences } from "../lib/types";
 import { appendHistory, HISTORY_LIMIT } from "../lib/telemetry";
@@ -100,6 +101,7 @@ export function createDemoBackend(): Backend {
   });
 
   return {
+    appVersion: version,
     bootstrap: async () => bootstrap(),
     onSnapshot: async (fn) => {
       snapshots.add(fn);

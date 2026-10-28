@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.2 — 2026-10-28
+
+- Clean memory from the tray icon's right-click menu using saved cleanup regions.
+- Show the running app version in Preferences under General → Updates.
+
+Cleanup remains limited to Windows 11 x64 build 26200; other builds remain in monitoring mode. Windows Authenticode signing remains absent.
+
 ## 0.1.1 — 2026-10-27
 
 - Optional Start with Windows setting, with registration in Windows Startup Apps.

@@ -133,6 +133,7 @@ export type DemoScenario =
   | "negative";
 
 export interface Backend {
+  appVersion: string;
   bootstrap(): Promise<Bootstrap>;
   onSnapshot(callback: (snapshot: MemorySnapshot) => void): Promise<() => void>;
   onCleanup(callback: (state: CleanupState) => void): Promise<() => void>;

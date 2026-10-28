@@ -3,6 +3,7 @@
   "description": "Local memory dashboard only",
   "windows": ["main"],
   "permissions": [
+    "core:app:allow-version",
     "core:event:allow-listen",
     "core:event:allow-unlisten",
     "core:window:allow-close",

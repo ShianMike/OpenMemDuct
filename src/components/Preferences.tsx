@@ -307,6 +307,10 @@ export function Preferences({
             <section className="preferences-group" aria-label="Updates">
               <div className="preferences-group-label">Updates</div>
               <div className="preferences-rows">
+                <div className="preference-row">
+                  <span>App version</span>
+                  <span>{backend.appVersion}</span>
+                </div>
                 <label className="preference-row">
                   <span>Install updates automatically</span>
                   {toggle("autoUpdateEnabled", "Install updates automatically")}

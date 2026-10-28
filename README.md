@@ -4,7 +4,7 @@ OpenMemDuct is a Windows memory monitor and cleanup app built with **React, Taur
 
 Designed for a lightweight tray workflow, it pairs clear memory graphs with a live physical-memory percentage and configurable cleanup operations.
 
-[Download 0.1.1 for Windows](https://github.com/ShianMike/OpenMemDuct/releases/download/v0.1.1/OpenMemDuct_0.1.1_x64-setup.exe) · [Report an Issue](https://github.com/ShianMike/OpenMemDuct/issues)
+[Download 0.1.2 for Windows](https://github.com/ShianMike/OpenMemDuct/releases/download/v0.1.2/OpenMemDuct_0.1.2_x64-setup.exe) · [Report an Issue](https://github.com/ShianMike/OpenMemDuct/issues)
 
 **Unsigned release:** The Windows installer is currently unsigned. Windows may show **Unknown publisher** or a **SmartScreen** warning. Review the release details and checksum below before deciding whether to run it; keep Windows protections enabled.
 
@@ -32,13 +32,15 @@ Cleanup is currently enabled for **Windows build 26200**. Other builds remain in
 
 ## Getting Started
 
-Download the [0.1.1 Windows x64 setup EXE](https://github.com/ShianMike/OpenMemDuct/releases/download/v0.1.1/OpenMemDuct_0.1.1_x64-setup.exe), run the installer, and open OpenMemDuct.
+Download the [0.1.2 Windows x64 setup EXE](https://github.com/ShianMike/OpenMemDuct/releases/download/v0.1.2/OpenMemDuct_0.1.2_x64-setup.exe), run the installer, and open OpenMemDuct.
 
 1. Open **Preferences → Memory** and choose the regions to clean.
 2. Select **Clean Memory**. Results appear on each graph; select a result label for details.
-3. Close the dashboard to keep the tray monitor running. Use **Open** to return or **Quit** from the tray menu to exit.
+3. Close the dashboard to keep the tray monitor running. Right-click the tray icon and select **Clean memory** to use your saved cleanup regions, **Open** to return, or **Quit** to exit.
 
 To launch at sign-in, enable **Preferences → General → Start with Windows**. Enable **Start in Tray** as well to keep the dashboard closed when the app starts.
+
+Find the current app version under **Preferences → General → Updates**.
 
 To opt in to automatic updates, enable **Preferences → General → Install updates automatically**. OpenMemDuct checks GitHub Releases at startup and every six hours while enabled. Closing the dashboard keeps the cleanup approval session active; quitting OpenMemDuct ends it.
 
@@ -61,20 +63,22 @@ See [Contributing](CONTRIBUTING.md) for checks and project structure.
 
 ## Release Status
 
-Version **0.1.1** targets Windows 11 x64. See the [v0.1.1 release notes](https://github.com/ShianMike/OpenMemDuct/releases/tag/v0.1.1) for published assets, the exact source commit, Windows Checks and Package CI results, installer checksum, and runtime validation coverage.
+Version **0.1.2**, dated **2026-10-28** (Asia/Manila), targets Windows 11 x64. It adds tray-menu **Clean memory** using saved cleanup regions and shows the running **App version** under **Preferences → General → Updates**.
 
-The release artifact set is `OpenMemDuct_0.1.1_x64-setup.exe`, `OpenMemDuct_0.1.1_x64-setup.exe.sig`, `latest.json`, and `SHA256SUMS`. The checksum file covers the installer, signature, and manifest.
+See the [v0.1.2 release notes](https://github.com/ShianMike/OpenMemDuct/releases/tag/v0.1.2) for published assets, the exact source commit, Windows Checks and Package CI results, installer checksum, and runtime validation coverage.
 
-Download the installer and [SHA256SUMS](https://github.com/ShianMike/OpenMemDuct/releases/download/v0.1.1/SHA256SUMS) from the same release into one folder, open PowerShell there, and run:
+The release artifact set is `OpenMemDuct_0.1.2_x64-setup.exe`, `OpenMemDuct_0.1.2_x64-setup.exe.sig`, `latest.json`, and `SHA256SUMS`. The checksum file covers the installer, signature, and manifest.
+
+Download the installer and [SHA256SUMS](https://github.com/ShianMike/OpenMemDuct/releases/download/v0.1.2/SHA256SUMS) from the same release into one folder, open PowerShell there, and run:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 -LiteralPath .\OpenMemDuct_0.1.1_x64-setup.exe
+Get-FileHash -Algorithm SHA256 -LiteralPath .\OpenMemDuct_0.1.2_x64-setup.exe
 Get-Content -LiteralPath .\SHA256SUMS
 ```
 
-Compare the reported hash with the entry for `OpenMemDuct_0.1.1_x64-setup.exe` in `SHA256SUMS` (letter case does not matter). If they differ, do not run the installer. A match confirms the downloaded bytes match the published checksum; it is not a trusted publisher signature or a safety guarantee.
+Compare the reported hash with the entry for `OpenMemDuct_0.1.2_x64-setup.exe` in `SHA256SUMS` (letter case does not matter). If they differ, do not run the installer. A match confirms the downloaded bytes match the published checksum; it is not a trusted publisher signature or a safety guarantee.
 
-The original 0.1.0 installer has no in-app updater, and its immutable release has no updater signature or manifest. Install 0.1.1 manually once to gain optional automatic updates for subsequent releases. Live updates require the installer, matching `.exe.sig`, and `latest.json` to be published together; the 0.1.0 release remains unchanged. The Tauri updater signature authenticates updates to the app; it is separate from paid Windows Authenticode signing, so the installer and app binaries still have no verified Windows publisher identity.
+The original 0.1.0 installer has no in-app updater, and its immutable release has no updater signature or manifest. Version 0.1.1 introduced optional automatic updates. Users of the original 0.1.0 installer need one manual upgrade to 0.1.1 or a later release to gain the updater. Live updates require the installer, matching `.exe.sig`, and `latest.json` to be published together; the 0.1.0 release remains unchanged. The Tauri updater signature authenticates updates to the app; it is separate from paid Windows Authenticode signing, so the installer and app binaries still have no verified Windows publisher identity.
 
 Cleanup remains limited to build 26200. Clean-machine coverage, additional Windows builds, and controlled performance comparisons are ongoing.
 
