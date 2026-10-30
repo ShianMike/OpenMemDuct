@@ -3,8 +3,10 @@ import ReactDOM from "react-dom/client";
 import { App } from "./App";
 import { createBackend } from "./lib/backend";
 import { createTelemetryStore } from "./lib/telemetry";
+import { initializeTheme } from "./lib/theme";
 import "./styles.css";
 
+initializeTheme();
 const root = ReactDOM.createRoot(document.getElementById("root")!);
 createBackend()
   .then((backend) => {

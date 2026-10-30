@@ -3,6 +3,7 @@ import type {
   Backend,
   Capabilities,
   Preferences as Settings,
+  ThemePreference,
   TrayAction,
 } from "../lib/types";
 import { cleanupOptions } from "../lib/types";
@@ -27,6 +28,7 @@ export function Preferences({
   onSaved,
   onClose,
   onSavingChange,
+  onThemePreview,
   children,
 }: {
   preferences: Settings;
@@ -35,6 +37,7 @@ export function Preferences({
   onSaved(value: Settings): void;
   onClose(): void;
   onSavingChange?(saving: boolean): void;
+  onThemePreview?(theme: ThemePreference | null): void;
   children?: ReactNode;
 }) {
   const [draft, setDraft] = useState(() => ({ ...preferences }));
@@ -57,6 +60,11 @@ export function Preferences({
   const message = issue?.message ?? saveError;
   const errorId = id + "-error";
   const shortcut = draft.hotkey.replace("Super", "Win").replaceAll("+", " + ");
+
+  useEffect(() => {
+    onThemePreview?.(draft.theme);
+    return () => onThemePreview?.(null);
+  }, [draft.theme, onThemePreview]);
 
   useEffect(() => {
     if (!issue) return;
@@ -235,6 +243,51 @@ export function Preferences({
       >
         {page === "general" ? (
           <>
+            <section className="preferences-group" aria-label="Appearance">
+              <div className="preferences-group-label">Appearance</div>
+              <div
+                className="theme-picker"
+                role="radiogroup"
+                aria-label="Color theme"
+              >
+                {(["light", "dark", "system"] as const).map((theme) => (
+                  <label className="theme-choice" key={theme}>
+                    <input
+                      className="sr-only"
+                      type="radio"
+                      name={id + "-theme"}
+                      value={theme}
+                      checked={draft.theme === theme}
+                      onChange={() => set("theme", theme)}
+                    />
+                    <span
+                      className="theme-swatch"
+                      data-preview={theme}
+                      aria-hidden="true"
+                    >
+                      <span />
+                      <span />
+                      <span />
+                    </span>
+                    <span>
+                      {theme === "system"
+                        ? "System"
+                        : theme === "dark"
+                          ? "Dark"
+                          : "Light"}
+                    </span>
+                    <span className="theme-choice-indicator" aria-hidden="true" />
+                  </label>
+                ))}
+              </div>
+              <p className="preference-note">
+                {draft.theme === "system"
+                  ? "Follows your Windows appearance."
+                  : draft.theme === "dark"
+                    ? "Warm graphite, soft contrast, and a little copper."
+                    : "A clear, quiet workspace."}
+              </p>
+            </section>
             <section className="preferences-group" aria-label="App and Tray">
               <div className="preferences-group-label">App and Tray</div>
               <div className="preferences-rows">

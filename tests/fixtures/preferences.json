@@ -1,4 +1,5 @@
 {
+  "theme": "system",
   "startWithWindows": false,
   "startInTray": false,
   "autoUpdateEnabled": false,
