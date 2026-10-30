@@ -1,7 +1,14 @@
 import type { Backend, Bootstrap, MemorySnapshot } from "./types";
+import { compactHistory } from "./history";
 
-export const HISTORY_LIMIT = 3600;
-export const HISTORY_DURATION_MS = 60 * 60_000;
+export {
+  HISTORY_LIMIT,
+  HISTORY_DURATION_MS,
+  HISTORY_RECENT_DURATION_MS,
+  HISTORY_RECENT_BUCKET_MS,
+  HISTORY_ARCHIVE_BUCKET_MS,
+  historyGapThreshold,
+} from "./history";
 
 export interface DashboardState {
   data: Bootstrap | null;
@@ -55,18 +62,15 @@ export function appendHistory(
   history: MemorySnapshot[],
   reading: MemorySnapshot,
 ): MemorySnapshot[] {
+  const last = history.at(-1);
   if (
     !validSnapshot(reading) ||
-    (history.length > 0 &&
-      reading.sequence <= history[history.length - 1].sequence)
+    (last && reading.sequence <= last.sequence)
   )
     return history;
-  return [
-    ...history.filter(
-      (s) => s.timestampMs >= reading.timestampMs - HISTORY_DURATION_MS,
-    ),
-    reading,
-  ].slice(-HISTORY_LIMIT);
+  // A newer sequence remains current when the system clock moves backwards.
+  if (last && reading.timestampMs < last.timestampMs) return [reading];
+  return compactHistory([...history, reading]);
 }
 
 export function createTelemetryStore(backend: Backend) {
@@ -137,9 +141,7 @@ export function createTelemetryStore(backend: Backend) {
           }
           const data = await backend.bootstrap();
           if (disposed) return;
-          let history = data.history
-            .filter(validSnapshot)
-            .slice(-HISTORY_LIMIT);
+          let history = compactHistory(data.history.filter(validSnapshot));
           for (const reading of pending)
             history = appendHistory(history, reading);
           // Keep the native backfill and any newer events received during bootstrap.

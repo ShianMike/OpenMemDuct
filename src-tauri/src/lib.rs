@@ -3,6 +3,7 @@ mod controls;
 #[cfg(windows)]
 pub mod diagnostics;
 mod elevation;
+mod history;
 mod memory;
 mod models;
 mod settings;
@@ -11,6 +12,7 @@ mod startup;
 mod tray_icon;
 mod updater;
 
+use history::push_history;
 use models::*;
 use std::{
     collections::VecDeque,
@@ -238,7 +240,9 @@ fn open_dashboard(app: &tauri::AppHandle) -> tauri::Result<()> {
         .resizable(false)
         .maximizable(false)
         .visible(!validation_mode())
-        .theme(Some(tauri::Theme::Light))
+        // Let WebView2 report Windows appearance for the System preference.
+        // Explicit app themes are applied by the dashboard's color scheme.
+        .theme(None)
         .background_color(tauri::webview::Color(255, 255, 255, 255))
         .data_directory(directory)
         .center()
@@ -260,17 +264,6 @@ fn physical_usage(snapshot: &MemorySnapshot) -> Option<f64> {
         .physical_total
         .checked_sub(metrics.physical_available)?;
     (metrics.physical_total > 0).then(|| 100.0 * used as f64 / metrics.physical_total as f64)
-}
-
-fn push_history(history: &mut VecDeque<MemorySnapshot>, snapshot: MemorySnapshot) {
-    let cutoff = snapshot.timestamp_ms.saturating_sub(3_600_000);
-    while history.front().is_some_and(|s| s.timestamp_ms < cutoff) {
-        history.pop_front();
-    }
-    history.push_back(snapshot);
-    while history.len() > 3600 {
-        history.pop_front();
-    }
 }
 
 pub fn dispatch_cli() -> Option<Result<(), String>> {
@@ -625,34 +618,5 @@ mod tests {
         assert_eq!(physical_usage(&sample), None);
         sample.metrics = None;
         assert_eq!(physical_usage(&sample), None);
-    }
-
-    #[test]
-    fn history_prunes_count_and_age() {
-        let mut history = VecDeque::new();
-        for sequence in 0..3620 {
-            push_history(
-                &mut history,
-                MemorySnapshot {
-                    sequence,
-                    timestamp_ms: sequence * 1000,
-                    elapsed_ms: sequence * 1000,
-                    metrics: None,
-                    error: Some("Test".into()),
-                },
-            );
-        }
-        assert_eq!(history.len(), 3600);
-        push_history(
-            &mut history,
-            MemorySnapshot {
-                sequence: 3621,
-                timestamp_ms: 8_000_000,
-                elapsed_ms: 8_000_000,
-                metrics: None,
-                error: Some("Test".into()),
-            },
-        );
-        assert_eq!(history.len(), 1);
     }
 }

@@ -1,6 +1,8 @@
 # Release Preparation
 
-This guide targets release **0.1.2**, dated **2026-10-28** (Asia/Manila). Confirm npm, Cargo, their lockfiles, and Tauri all use 0.1.2 before packaging. The [GitHub Releases page](https://github.com/ShianMike/OpenMemDuct/releases) records published builds, their exact source commits and tags, and their validation limits.
+This guide targets release **0.1.3**, dated **2026-10-30** (Asia/Manila). Confirm npm, Cargo, their lockfiles, and Tauri all use 0.1.3 before packaging. The [GitHub Releases page](https://github.com/ShianMike/OpenMemDuct/releases) records published builds, their exact source commits and tags, and their validation limits.
+
+**Unsigned Windows distribution:** The installer and app binaries have no Windows Authenticode publisher signature. Tauri updater signatures authenticate in-app updates separately; Unknown publisher or SmartScreen warnings may still appear.
 
 ## Current Scope
 
@@ -10,12 +12,15 @@ This guide targets release **0.1.2**, dated **2026-10-28** (Asia/Manila). Confir
 - License: MIT; distributed dependencies retain their own licenses.
 - Installer target: NSIS setup EXE.
 - Packaging uses the per-user NSIS bundle configured in `src-tauri/tauri.conf.json`.
-- Version 0.1.2 adds only Clean memory in the tray icon's right-click menu using saved cleanup regions and the running App version under Preferences → General → Updates.
+- Version 0.1.3 adds a custom chart-duration dropdown with eight ranges: 30 minutes, 1 hour, 2 hours, 4 hours, 8 hours, 16 hours, 1 day, and 2 days.
+- History is kept in memory for the current app session, for up to 48 hours and at most 9,816 snapshots. The recent hour uses one-second buckets; older five-minute buckets keep first and last readings, per-series minima and maxima, and unavailable readings. Closing the dashboard retains history while the tray app runs; quitting clears it.
+- One-day and two-day ranges show dates in chart labels, inspected readings, and cleanup timestamps.
+- Appearance adds Light, Dark, and System choices under Preferences → General → Appearance. Dark uses warm graphite and moss with copper accents. Changes preview immediately; Save persists the choice, and Cancel restores the saved appearance. Older preferences without a theme default to System, and the native window follows Windows appearance without forcing Light.
 
 The manual, main-only Package workflow runs the source checks, builds the Windows x64 installer and its updater signature, and uploads exactly four files as one workflow artifact:
 
-- `OpenMemDuct_0.1.2_x64-setup.exe`
-- `OpenMemDuct_0.1.2_x64-setup.exe.sig`
+- `OpenMemDuct_0.1.3_x64-setup.exe`
+- `OpenMemDuct_0.1.3_x64-setup.exe.sig`
 - `latest.json`
 - `SHA256SUMS` (hashes for the installer, signature, and manifest)
 
@@ -41,24 +46,27 @@ pwsh -File scripts/prepare-updater-artifacts.ps1 -SelfCheck
 
 The self-check uses synthetic files without signing secrets and retains its fixtures under the ignored `validation/` directory. It checks manifest fields and checksums and rejects missing, empty, malformed, unversioned, or version-mismatched signature inputs, invalid versions, empty installers, and extra installers. Reading the trusted comment here is a packaging consistency check; the native updater verifies the cryptographic signature before trusting the comment. The self-check does not verify a real updater signature or run an installer.
 
-The app's updater endpoint is [the latest release's `latest.json`](https://github.com/ShianMike/OpenMemDuct/releases/latest/download/latest.json). For this release, the generated manifest must contain version `0.1.2`, a UTC RFC 3339 `pub_date`, and one `windows-x86_64` platform. Its `signature` is the `.exe.sig` file's contents, and its installer URL is `https://github.com/ShianMike/OpenMemDuct/releases/download/v0.1.2/OpenMemDuct_0.1.2_x64-setup.exe`. Notes are optional and omitted. Keep the per-user (`currentUser`) NSIS installation mode.
+The app's updater endpoint is [the latest release's `latest.json`](https://github.com/ShianMike/OpenMemDuct/releases/latest/download/latest.json). For this release, the generated manifest must contain version `0.1.3`, a UTC RFC 3339 `pub_date`, and one `windows-x86_64` platform. Its `signature` is the `.exe.sig` file's contents, and its installer URL is `https://github.com/ShianMike/OpenMemDuct/releases/download/v0.1.3/OpenMemDuct_0.1.3_x64-setup.exe`. Notes are optional and omitted. Keep the per-user (`currentUser`) NSIS installation mode.
 
-The original public version 0.1.0 installer has no updater, and its immutable release has no `.exe.sig` or `latest.json`. Leave its installer, checksum asset, tag, and version unchanged. Version 0.1.1 introduced the opt-in updater (`autoUpdateEnabled`, off by default); users of the original 0.1.0 installer must manually install 0.1.1 or a later release once to gain it. Publish the 0.1.2 installer, matching signature, manifest, and checksums from the same Package run together so updater-capable installations can receive it through the endpoint. Offline signing or artifact checks do not prove successful automatic update installation.
+The original public version 0.1.0 installer has no updater, and its immutable release has no `.exe.sig` or `latest.json`. Leave its installer, checksum asset, tag, and version unchanged. Version 0.1.1 introduced the opt-in updater (`autoUpdateEnabled`, off by default); users of the original 0.1.0 installer must manually install 0.1.1 or a later release once to gain it. Publish the 0.1.3 installer, matching signature, manifest, and checksums from the same Package run together so updater-capable installations can receive it through the endpoint. Offline signing or artifact checks do not prove successful automatic update installation.
 
 Record native behavior and packaged-app evidence against the exact release commit. Report source/CI results and actual automatic update installation coverage separately; do not infer installed-app behavior from this guide or from the artifact self-check.
 
 ## Before Packaging
 
-- [ ] Publish the source repository and run its Windows Checks workflow on the intended release commit.
+- [ ] Complete the hosted Windows Checks workflow successfully on the intended release commit before packaging. An in-progress run is not a passing release gate.
 - [ ] Pass every command in [Contributing → Checks](../CONTRIBUTING.md#checks) using the committed lockfiles.
-- [ ] Confirm npm, Cargo, lockfile, and Tauri versions agree.
-- [ ] Finalize release notes with the exact source commit, Windows Checks and Package CI links and results, installer SHA-256, and factual runtime coverage. Resolve every placeholder before publication; keep local validation paths out of the public release notes.
+- [ ] Confirm npm, Cargo, both lockfiles, and Tauri versions agree on 0.1.3.
+- [ ] Prepare release notes for the 0.1.3 scope, signing status, and validation limits. After Package succeeds, finalize them with the exact source commit, completed Windows Checks and Package CI links and results, verified installer SHA-256, and factual runtime coverage. Keep local validation paths out of the public release notes.
 - [ ] Confirm the updater signing secrets are configured, the embedded public key matches, and updater artifacts are enabled. Never print or commit the private key or password.
-- [ ] Confirm the README screenshot, features, supported builds, and changelog match the candidate.
+- [ ] Confirm the README screenshots, features, supported builds, and changelog match the candidate. Keep the existing dashboard image; the dark image shows demo two-day history and must not be presented as a real 48-hour runtime validation.
+- [ ] Check deterministic history coverage for one-second recent buckets, five-minute archive boundaries, independent extrema, unavailable readings, the 48-hour cutoff, and the 9,816-snapshot bound in both the frontend and native history paths. Keep fixture results distinct from real session and sleep/resume observations.
 - [ ] Confirm release archives exclude local environment files, development captures, dependency folders, and build output.
 - [ ] Review licenses and required notices for dependencies included in the distributable.
 
-The local workspace check results belong to the candidate being inspected. Hosted CI remains a separate gate; a workflow file alone does not prove a passing run.
+The local workspace check results belong to the candidate being inspected. Hosted CI remains a separate gate; a workflow file or a passing local test count alone does not prove a passing run. Record only completed results for the exact release commit, and leave installation, upgrade, or reboot coverage unclaimed until those checks are performed.
+
+Local validation for the 0.1.3 candidate passed 125 frontend tests, 34 native tests, the helper self-test, updater artifact self-check, build, lint, and Clippy. Browser preview behavior was validated. An isolated native Windows build launched and displayed live memory counters; native UI interactions, installation, upgrade, and reboot behavior remain unverified. These local results do not establish a passing hosted CI run.
 
 ## Packaged-App Checks
 
@@ -70,13 +78,19 @@ npm run tauri -- build --target x86_64-pc-windows-msvc --bundles nsis --ci
 
 - [ ] Install, launch, upgrade, and uninstall on a clean supported Windows environment.
 - [ ] Check WebView2 availability and installer behavior when the runtime is missing.
-- [ ] Verify all three counters, graph history, actual sleep/resume gaps, and settings persistence.
+- [ ] Verify all three counters and select each of the eight chart durations with the mouse and keyboard. Check the selected state, Arrow keys, Home/End, Enter/Space, Escape, Tab, and outside-click dismissal in Light and Dark, including display scaling and menu clipping.
+- [ ] Verify longer ranges show only available session readings, with dates on one-day and two-day axes, inspected readings, and cleanup timestamps. Check unavailable counters and real sleep/resume gaps rather than filling them with invented readings.
+- [ ] Verify history survives dashboard close/reopen while the tray app runs and starts afresh after Quit/relaunch. Record the duration actually observed; demo or fixture history does not establish a real 48-hour session run.
+- [ ] Verify Light, Dark, and System under Preferences → General → Appearance preview immediately across the dashboard and Preferences. Check the warm graphite/moss palette, copper accents, chart dropdowns, and cleanup details in both themes.
+- [ ] Verify Save persists each appearance after reopening Preferences, closing/reopening the dashboard, and quitting/relaunching the app. Verify Cancel restores the saved appearance without saving the preview.
+- [ ] Verify System follows Windows light/dark changes while the packaged app runs and after relaunch. Confirm the native window does not force Light, and explicit Light and Dark choices remain independent of Windows appearance.
+- [ ] Load legacy preferences without a theme field in an isolated validation environment. Confirm System is selected and existing startup, tray, update, cleanup-region, notification, and shortcut settings survive loading and saving.
 - [ ] Verify the tray percentage, multiple display scales, Explorer restart, second launch, and dashboard close/reopen behavior.
 - [ ] Verify tray-menu Clean memory uses the saved cleanup regions with the dashboard closed and after reopening it.
-- [ ] Verify Preferences → General → Updates shows App version `0.1.2` after installation and upgrade.
+- [ ] Verify Preferences → General → Updates shows App version `0.1.3` after installation and upgrade.
 - [ ] Verify manual cleanup, UAC cancellation, partial/unsupported outcomes, and the observation period. Default-off operations need their own controlled checks before being described as runtime validated.
 - [ ] Verify notifications, notification sound, and app branding in the installed application.
-- [ ] Verify Start with Windows and Start in Tray, cleanup approval reuse after closing/reopening the dashboard, and the frosted cleanup detail popovers, including reduced-transparency mode.
+- [ ] Verify Start with Windows and Start in Tray, including an actual reboot/sign-in check, cleanup approval reuse after closing/reopening the dashboard, and the frosted cleanup detail popovers, including reduced-transparency mode.
 - [ ] Verify updates remain off by default. On an updater-capable installed version, opt in and test a newer signed release through `latest.json`, including rejection of a mismatched installer signature. Record this separately from the artifact self-check.
 - [ ] Verify shortcut conflicts, tray actions, and automatic cleanup in elevated and ordinary sessions.
 - [ ] Measure foreground and tray CPU/memory usage in the packaged build, including owned WebView2 processes. Keep performance claims aligned with those measurements.
@@ -86,8 +100,9 @@ The development tray-lifecycle and native cleanup observations do not replace th
 ## Publish
 
 - [ ] State the signing status in every release note: Tauri updater signature present; Windows Authenticode publisher signing absent.
-- [ ] Confirm the 0.1.2 changelog entry is dated 2026-10-28 (Asia/Manila) and covers only tray-menu cleanup and the running App version display.
+- [ ] Confirm the 0.1.3 changelog entry is dated 2026-10-30 (Asia/Manila) and covers the eight chart ranges, bounded two-day session history, date-aware labels, dark palette, appearance preview/save/cancel, and legacy preference compatibility.
+- [ ] Wait for both hosted Windows Checks and the main-only Package workflow to finish successfully for the exact release commit. Verify the installer version, real updater signature and signed version, manifest URL, and all packaged checksums before publication.
 - [ ] Tag the exact commit whose checks and packaged artifacts were validated.
-- [ ] Use tag `v0.1.2` and publish all four files from the same validated Package artifact together, preserving their filenames. Do not mix an installer with a signature or manifest from another build. In every release note, link the exact source commit and the Windows Checks and Package CI runs used for that release, and include the installer's SHA-256 checksum.
+- [ ] Use tag `v0.1.3` and publish all four files from the same validated Package artifact together, preserving their filenames. Do not mix an installer with a signature or manifest from another build. In every release note, link the exact source commit and the Windows Checks and Package CI runs used for that release, and include the installer's SHA-256 checksum.
 - [ ] In every release note, state that cleanup supports Windows build 26200 and other builds remain in monitoring mode. Record factual validation limits: what was checked, on which Windows build, and which installed-app checks or performance comparisons remain unverified. Do not describe source or CI checks as installed-app validation.
 - [ ] Verify the public release page and all four download links. Confirm `/releases/latest/download/latest.json` resolves to the intended stable release and its platform URL downloads the exact matching installer. Retain the one-time manual upgrade explanation for 0.1.0 users.

@@ -1,8 +1,9 @@
 import { memo, useId, useMemo, useState } from "react";
 import type { CleanupReport, MemorySeries, MemorySnapshot } from "../lib/types";
-import { formatBytes, percentage, timeLabel } from "../lib/format";
+import { durationLabel, formatBytes, percentage, timeLabel } from "../lib/format";
 import { cleanupMarkerY } from "../lib/cleanupMarkerY";
 import { memoryRangeColor, memoryRangeStops } from "../lib/memoryPalette";
+import { historyGapThreshold } from "../lib/history";
 
 export function seriesValues(
   sample: MemorySnapshot,
@@ -133,7 +134,9 @@ export function chartSegments(
     const values = seriesValues(sample, series);
     if (
       !values ||
-      (previous !== null && sample.timestampMs - previous > 7500)
+      (previous !== null &&
+        sample.timestampMs - previous >
+          historyGapThreshold(previous, history.at(-1)!.timestampMs))
     ) {
       if (current.length) segments.push(current);
       current = [];
@@ -342,8 +345,8 @@ export const MemoryChart = memo(function MemoryChart({
           aria-label={
             label +
             " over " +
-            minutes +
-            " minutes. " +
+            durationLabel(minutes) +
+            ". " +
             (latest
               ? formatBytes(latest.used) +
                 " of " +
@@ -395,7 +398,7 @@ export const MemoryChart = memo(function MemoryChart({
                   ",160 Z"
                 }
                 fill={colorReference ? colorGradient : "#838b96"}
-                fillOpacity="0.045"
+                fillOpacity="var(--chart-fill-opacity, 0.045)"
               />
               <path
                 d={paths[i]}
@@ -428,7 +431,7 @@ export const MemoryChart = memo(function MemoryChart({
                       )
                     : "#838b96"
                 }
-                stroke="white"
+                stroke="var(--chart-point-border, white)"
                 strokeWidth="1.5"
                 vectorEffect="non-scaling-stroke"
               />
@@ -447,7 +450,7 @@ export const MemoryChart = memo(function MemoryChart({
                   ? `calc(${marker.ceiling / 1.6}% - 28px)`
                   : "0px",
             }}
-            aria-label={`Inspect cleanup at ${timeLabel(marker.timestamp, true)}: ${cleanupLabels[marker.report.status]}${marker.change ? ", " + marker.change : ""}`}
+            aria-label={`Inspect cleanup at ${timeLabel(marker.timestamp, true, minutes >= 1440)}: ${cleanupLabels[marker.report.status]}${marker.change ? ", " + marker.change : ""}`}
             aria-pressed={marker === active}
             onClick={() => {
               onSelectCleanup(marker.report.id);
@@ -491,7 +494,7 @@ export const MemoryChart = memo(function MemoryChart({
                 aria-label={`${label} cleanup details`}
               >
                 <div className="cleanup-inspector-meta">
-                  <span>{timeLabel(active.timestamp, true)}</span>
+                  <span>{timeLabel(active.timestamp, true, minutes >= 1440)}</span>
                   {active.report.durationMs !== null && (
                     <span>{active.report.durationMs.toLocaleString()} ms</span>
                   )}
@@ -554,7 +557,9 @@ export const MemoryChart = memo(function MemoryChart({
             style={{ left: Math.max(15, Math.min(85, selected.x / 8)) + "%" }}
           >
             <strong>{formatBytes(selectedValues.used)}</strong>
-            <span>{timeLabel(selected.sample.timestampMs, true)}</span>
+            <span>
+              {timeLabel(selected.sample.timestampMs, true, minutes >= 1440)}
+            </span>
           </div>
         )}
       </div>
@@ -566,6 +571,7 @@ export const MemoryChart = memo(function MemoryChart({
               : timeLabel(
                   start + (now - start) * fraction,
                   now - start <= 120_000,
+                  minutes >= 1440,
                 )}
           </span>
         ))}

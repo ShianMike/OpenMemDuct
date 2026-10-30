@@ -83,9 +83,19 @@ pub struct MemorySnapshot {
     pub error: Option<String>,
 }
 
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum ThemePreference {
+    #[default]
+    System,
+    Light,
+    Dark,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
 pub struct Preferences {
+    pub theme: ThemePreference,
     pub start_with_windows: bool,
     pub start_in_tray: bool,
     pub auto_update_enabled: bool,
@@ -126,6 +136,7 @@ pub fn default_regions() -> Vec<CleanupAction> {
 impl Default for Preferences {
     fn default() -> Self {
         Self {
+            theme: ThemePreference::System,
             start_with_windows: false,
             start_in_tray: false,
             auto_update_enabled: false,
@@ -262,6 +273,52 @@ pub struct ProcessList {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn preferences_theme_roundtrips_all_values() {
+        assert_eq!(ThemePreference::default(), ThemePreference::System);
+        assert_eq!(Preferences::default().theme, ThemePreference::System);
+
+        for (theme, expected) in [
+            (ThemePreference::System, "system"),
+            (ThemePreference::Light, "light"),
+            (ThemePreference::Dark, "dark"),
+        ] {
+            let preferences = Preferences {
+                theme,
+                start_in_tray: true,
+                ..Default::default()
+            };
+            let encoded = serde_json::to_value(&preferences).unwrap();
+            assert_eq!(encoded["theme"], expected);
+            assert_eq!(
+                serde_json::from_value::<Preferences>(encoded).unwrap(),
+                preferences
+            );
+        }
+    }
+
+    #[test]
+    fn preferences_reject_invalid_theme_values() {
+        for invalid in [
+            serde_json::json!("sepia"),
+            serde_json::json!(""),
+            serde_json::json!("Dark"),
+            serde_json::json!("SYSTEM"),
+            serde_json::Value::Null,
+            serde_json::json!(42),
+            serde_json::json!(true),
+            serde_json::json!([]),
+            serde_json::json!({ "mode": "dark" }),
+        ] {
+            assert!(
+                serde_json::from_value::<Preferences>(serde_json::json!({ "theme": invalid }))
+                    .is_err(),
+                "Accepted invalid theme: {invalid}"
+            );
+        }
+    }
+
     #[test]
     fn shared_frontend_contract_roundtrips() {
         let bytes = include_str!("../../tests/fixtures/snapshot.json");

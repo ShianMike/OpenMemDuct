@@ -1,7 +1,14 @@
 import { version } from "../../package.json";
 import { GiB } from "../lib/format";
 import { defaultPreferences } from "../lib/types";
-import { appendHistory, HISTORY_LIMIT } from "../lib/telemetry";
+import { appendHistory } from "../lib/telemetry";
+import {
+  compactHistory,
+  HISTORY_ARCHIVE_BUCKET_MS,
+  HISTORY_DURATION_MS,
+  HISTORY_RECENT_DURATION_MS,
+  HISTORY_RECENT_BUCKET_MS,
+} from "../lib/history";
 import { preferencesError } from "../lib/preferences";
 import type {
   Backend,
@@ -18,6 +25,7 @@ export function createDemoBackend(): Backend {
   let sequence = 0;
   let reclaimedBytes = 0;
   let trimmedSystemBytes = 0;
+  let startedAtMs = 0;
   let preferences: Preferences = { ...defaultPreferences };
   let cleanup: CleanupState = { reports: [], busy: false, cooldownUntilMs: 0 };
   let interval: ReturnType<typeof setInterval> | undefined;
@@ -25,14 +33,14 @@ export function createDemoBackend(): Backend {
   const cleanups = new Set<(state: CleanupState) => void>();
   const publishCleanup = () => cleanups.forEach((fn) => fn({ ...cleanup }));
   function reading(timestampMs = Date.now()): MemorySnapshot {
-    const t = sequence++;
+    const t = Math.max(0, (timestampMs - startedAtMs) / 1000);
     const wave = Math.sin(t / 210) * 0.6 + Math.sin(t / 57) * 0.18;
     const used =
       scenario === "pressure" ? 29.9 : 18.6 + wave + (t % 900 > 720 ? 1.3 : 0);
     return {
-      sequence: t,
+      sequence: sequence++,
       timestampMs,
-      elapsedMs: t * 1000,
+      elapsedMs: Math.round(t * 1000),
       error: null,
       metrics: {
         physicalTotal: 32 * GiB,
@@ -70,9 +78,21 @@ export function createDemoBackend(): Backend {
   let history: MemorySnapshot[];
   function seed() {
     const end = Date.now() - (scenario === "stale" ? 30_000 : 0);
-    history = Array.from({ length: HISTORY_LIMIT }, (_, i) =>
-      reading(end - (HISTORY_LIMIT - 1 - i) * 1000),
-    );
+    startedAtMs = end - HISTORY_DURATION_MS;
+    const samples: MemorySnapshot[] = [];
+    const recent = end - HISTORY_RECENT_DURATION_MS;
+    // Preview two days with only ~6,500 allocations, rather than synthesizing
+    // 172,801 full snapshots. Multiple readings per archive bucket show variation.
+    for (
+      let time = startedAtMs;
+      time < recent;
+      time += HISTORY_ARCHIVE_BUCKET_MS / 5
+    )
+      samples.push(reading(time));
+    for (let time = recent; time < end; time += HISTORY_RECENT_BUCKET_MS)
+      samples.push(reading(time));
+    samples.push(reading(end));
+    history = compactHistory(samples);
     latest = history[history.length - 1];
   }
   seed();

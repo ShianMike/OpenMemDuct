@@ -7,13 +7,20 @@ import {
 } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import type { Backend, DemoScenario, MemorySeries } from "./lib/types";
+import type {
+  Backend,
+  DemoScenario,
+  MemorySeries,
+  ThemePreference,
+} from "./lib/types";
 import type { TelemetryStore } from "./lib/telemetry";
-import { formatBytes, percentage } from "./lib/format";
+import { durationLabel, formatBytes, percentage } from "./lib/format";
 import { WindowBar } from "./components/WindowBar";
 import { Preferences as PreferencesEditor } from "./components/Preferences";
 import { memoryRangeColor } from "./lib/memoryPalette";
 import { MemoryChart, seriesValues } from "./components/MemoryChart";
+import { TimeRangeDropdown } from "./components/TimeRangeDropdown";
+import { useTheme } from "./lib/theme";
 
 export function App({
   backend,
@@ -27,6 +34,8 @@ export function App({
     store.getSnapshot,
   );
   const [sheet, setSheet] = useState<"settings" | null>(null);
+  const [themePreview, setThemePreview] = useState<ThemePreference | null>(null);
+  useTheme(data?.preferences.theme, sheet === "settings" ? themePreview : null);
   const [cleanupId, setCleanupId] = useState<string | null>(null);
   const [cleanupDetails, setCleanupDetails] = useState<{
     series: MemorySeries;
@@ -42,7 +51,7 @@ export function App({
     },
     [],
   );
-  const [minutes, setMinutes] = useState(15);
+  const [minutes, setMinutes] = useState(30);
   const [now, setNow] = useState(Date.now());
   const [scenario, setScenario] = useState<DemoScenario>("normal");
   const [actionError, setActionError] = useState<string | null>(null);
@@ -141,17 +150,20 @@ export function App({
   const stale =
     !data.snapshot?.metrics || now - data.snapshot.timestampMs > 6500;
   const latest = data.reports[0];
-  const chartNow = Math.max(
-    stale ? now : (data.snapshot?.timestampMs ?? now),
+  const chartClock = stale ? now : (data.snapshot?.timestampMs ?? now);
+  // A cleanup can arrive before its next telemetry sample. Reports from before
+  // a clock rollback must not keep the live chart anchored in the future.
+  const cleanupTimes = [
     latest?.after?.timestampMs ?? latest?.startedAtMs ?? 0,
     latest?.observations.at(-1)?.snapshot.timestampMs ?? 0,
-  );
+  ].filter((timestamp) => timestamp <= Math.max(now, chartClock) + 6500);
+  const chartNow = Math.max(chartClock, ...cleanupTimes);
   const chartStart = Math.max(
     chartNow - minutes * 60_000,
     Math.min(data.history[0]?.timestampMs ?? chartNow, chartNow - 60_000),
   );
-  const recordedMinutes = Math.min(
-    60,
+  const recordedMinutes = Math.max(
+    0,
     Math.round(
       ((data.history.at(-1)?.timestampMs ?? chartNow) -
         (data.history[0]?.timestampMs ?? chartNow)) /
@@ -193,21 +205,7 @@ export function App({
   return (
     <main className="graph-app">
       <WindowBar>
-        <div
-          className="time-options"
-          role="group"
-          aria-label="Chart time range"
-        >
-          {[5, 15, 30, 60].map((value) => (
-            <button
-              key={value}
-              aria-pressed={minutes === value}
-              onClick={() => setMinutes(value)}
-            >
-              {value === 60 ? "1 hour" : `${value} min`}
-            </button>
-          ))}
-        </div>
+        <TimeRangeDropdown minutes={minutes} onChange={setMinutes} />
       </WindowBar>
       <div className="graphs">
         {(["physical", "pagefile", "system"] as MemorySeries[]).map(
@@ -241,7 +239,7 @@ export function App({
                       style={
                         values && values.total > 0
                           ? {
-                              color: `color-mix(in srgb, ${memoryRangeColor(percentage(values.used, values.total))} 70%, #25262a)`,
+                              color: `color-mix(in srgb, ${memoryRangeColor(percentage(values.used, values.total))} 70%, var(--readout-mix))`,
                             }
                           : undefined
                       }
@@ -295,7 +293,7 @@ export function App({
           <span hidden={busy || cooldown > 0 || !!cleanupUnavailable}>
             {recordedMinutes < 1
               ? "Less than a minute recorded"
-              : `${recordedMinutes} min recorded`}
+              : `${durationLabel(recordedMinutes)} recorded`}
           </span>
           <span className="cleanup-state" role="status">
             {busy
@@ -365,6 +363,7 @@ export function App({
             onSaved={(value) => store.setPreferences(value)}
             onClose={() => setSheet(null)}
             onSavingChange={setSavingPreferences}
+            onThemePreview={setThemePreview}
           >
             {data.demo && backend.setScenario && (
               <label className="setting-row">

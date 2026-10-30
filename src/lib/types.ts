@@ -25,7 +25,10 @@ export interface MemorySnapshot {
   error: string | null;
 }
 
+export type ThemePreference = "system" | "light" | "dark";
+
 export interface Preferences {
+  theme: ThemePreference;
   startWithWindows: boolean;
   startInTray: boolean;
   autoUpdateEnabled: boolean;
@@ -192,6 +195,7 @@ export const cleanupOptions: {
   },
 ];
 export const defaultPreferences: Preferences = {
+  theme: "system",
   startWithWindows: false,
   startInTray: false,
   autoUpdateEnabled: false,

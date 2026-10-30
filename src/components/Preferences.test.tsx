@@ -43,6 +43,25 @@ it("shares the complete native default contract and preserves threshold boundari
   ).not.toBeNull();
 });
 
+it.each(["light", "dark", "system"] as const)(
+  "saves the %s appearance through the same native preferences path",
+  async (theme) => {
+    const { onSaved, onClose, save, backend } = await setup({
+      ...defaultPreferences,
+      theme: theme === "system" ? "light" : "system",
+    });
+    fireEvent.click(screen.getByRole("radio", {
+      name: theme === "system" ? "System" : theme === "dark" ? "Dark" : "Light",
+    }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    const expected = { ...defaultPreferences, theme };
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(expected));
+    expect(save).toHaveBeenCalledExactlyOnceWith(expected);
+    expect((await backend.bootstrap()).preferences.theme).toBe(theme);
+    expect(onClose).toHaveBeenCalledOnce();
+  },
+);
+
 it.each([
   { startWithWindows: true, startInTray: false },
   { startWithWindows: false, startInTray: true },

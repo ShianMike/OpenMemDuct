@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.3 — 2026-10-30 (Asia/Manila)
+
+Windows Authenticode publisher signing remains absent. Tauri updater signatures authenticate in-app updates separately and do not establish a verified Windows publisher identity.
+
+- Add a custom chart-duration dropdown with eight ranges: 30 minutes, 1 hour, 2 hours, 4 hours, 8 hours, 16 hours, 1 day, and 2 days.
+- Retain up to 48 hours of in-memory history for the current app session, bounded to 9,816 snapshots. The recent hour uses one-second buckets; older five-minute buckets preserve first and last readings, per-series minima and maxima, and unavailable readings.
+- Include dates in chart labels, inspected readings, and cleanup timestamps for one-day and two-day ranges.
+- Add a warm graphite and moss dark palette with copper accents across the dashboard, preferences, dropdowns, and cleanup details.
+- Add Light, Dark, and System choices under Preferences → General → Appearance, with immediate preview, Save to persist across launches, and Cancel to restore the saved appearance.
+- Keep older preferences compatible by defaulting a missing appearance setting to System. System follows Windows appearance changes while the app runs.
+- Keep monitoring live after a backward Windows clock correction by restarting the affected session history.
+
+Cleanup remains limited to Windows 11 x64 build 26200; other builds remain in monitoring mode. Session history is not saved to disk and clears when the app quits.
+
 ## 0.1.2 — 2026-10-28
 
 - Clean memory from the tray icon's right-click menu using saved cleanup regions.

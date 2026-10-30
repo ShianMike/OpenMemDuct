@@ -94,6 +94,8 @@ fn replace(from: &Path, to: &Path) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::ThemePreference;
+
     #[test]
     fn rejects_unknown_fields_and_invalid_values() {
         assert!(serde_json::from_str::<Preferences>(r#"{"startInTray":"yes"}"#).is_err());
@@ -106,6 +108,7 @@ mod tests {
         assert!(preferences.start_in_tray);
         assert!(!preferences.start_with_windows);
         assert!(!preferences.auto_update_enabled);
+        assert_eq!(preferences.theme, ThemePreference::System);
         assert_eq!(
             preferences.cleanup_regions,
             crate::models::default_regions()
@@ -119,6 +122,7 @@ mod tests {
         );
         let mut legacy = expected;
         legacy.as_object_mut().unwrap().remove("autoUpdateEnabled");
+        legacy.as_object_mut().unwrap().remove("theme");
         assert_eq!(
             serde_json::from_value::<Preferences>(legacy).unwrap(),
             Preferences::default()
@@ -169,15 +173,22 @@ mod tests {
         let first = Preferences::default();
         save(&path, &first).unwrap();
         assert_eq!(load(&path).unwrap(), first);
-        let second = Preferences {
+        let mut second = Preferences {
             start_with_windows: true,
             start_in_tray: true,
             auto_update_enabled: true,
             cleanup_regions: vec![crate::models::CleanupAction::SystemFileCache],
             ..Default::default()
         };
-        save(&path, &second).unwrap();
-        assert_eq!(load(&path).unwrap(), second);
+        for theme in [
+            ThemePreference::System,
+            ThemePreference::Light,
+            ThemePreference::Dark,
+        ] {
+            second.theme = theme;
+            save(&path, &second).unwrap();
+            assert_eq!(load(&path).unwrap(), second);
+        }
         let before = fs::read(&path).unwrap();
         let pending = path.with_extension("pending");
         fs::write(&pending, b"Existing interrupted write").unwrap();
@@ -191,5 +202,38 @@ mod tests {
         };
         assert!(save(&path, &duplicate).is_err());
         assert_eq!(fs::read(&path).unwrap(), before);
+    }
+
+    #[test]
+    fn loads_legacy_preferences_with_system_theme_and_rejects_invalid_theme() {
+        let directory = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .join("validation/settings-io")
+            .join(format!(
+                "theme-{}-{}",
+                crate::models::now_ms(),
+                std::process::id()
+            ));
+        fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("preferences.json");
+        let expected = Preferences {
+            start_with_windows: true,
+            start_in_tray: true,
+            auto_update_enabled: true,
+            warning_percent: 65,
+            cleanup_regions: vec![crate::models::CleanupAction::SystemFileCache],
+            ..Default::default()
+        };
+        let mut legacy = serde_json::to_value(&expected).unwrap();
+        legacy.as_object_mut().unwrap().remove("theme");
+        fs::write(&path, serde_json::to_vec(&legacy).unwrap()).unwrap();
+        assert_eq!(load(&path).unwrap(), expected);
+
+        legacy["theme"] = serde_json::json!("sepia");
+        fs::write(&path, serde_json::to_vec(&legacy).unwrap()).unwrap();
+        assert!(load(&path)
+            .unwrap_err()
+            .contains("Preferences could not be read"));
     }
 }

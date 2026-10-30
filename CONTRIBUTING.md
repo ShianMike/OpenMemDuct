@@ -84,7 +84,9 @@ This uses synthetic installer/signature fixtures and checks the generated manife
 
 ## Implementation Notes
 
-The dashboard is fixed at 1180 × 820 logical pixels. Rust owns bounded history, keeps up to one hour of readings, and samples less frequently when the window is closed or minimized. Closing the dashboard destroys its WebView and leaves the Rust tray monitor running.
+The dashboard is fixed at 1180 × 820 logical pixels. Rust owns bounded history for up to two days and samples less frequently when the window is closed or minimized. The newest hour keeps readings at one-second resolution. Older five-minute buckets retain actual first/last readings, peaks and troughs for each series, and unavailable counters, with a maximum of 9,816 snapshots. Keep the retention contracts in `src/lib/history.ts` and `src-tauri/src/history.rs` aligned. Closing the dashboard destroys its WebView and leaves the Rust tray monitor running.
+
+The saved `theme` preference supports `system`, `light`, and `dark`. The System choice follows Windows through WebView2; explicit themes use the document's `data-theme` and CSS color scheme. Appearance changes preview inside Preferences and become persistent on Save.
 
 Physical Memory measures usable physical total minus available memory. Pagefile measures actual pagefile usage and allocation, separately from system commit. System Working Set measures the system file-cache working set against its observed peak. Unknown counters remain unavailable rather than becoming zero.
 

@@ -222,9 +222,10 @@ describe("minimal dashboard", () => {
     ).toBeVisible();
     expect(screen.queryByRole("heading")).not.toBeInTheDocument();
     expect(screen.getByText("Demo")).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "1 hour" }));
+    fireEvent.click(screen.getByRole("combobox", { name: "Chart time range" }));
+    fireEvent.click(screen.getByRole("option", { name: "1 hour" }));
     expect(
-      screen.getByRole("img", { name: /Pagefile over 60 minutes\./ }),
+      screen.getByRole("img", { name: /Pagefile over 1 hour\./ }),
     ).toBeVisible();
     expect(
       screen.getByRole("button", { name: "Minimize Window" }),
@@ -246,6 +247,89 @@ describe("minimal dashboard", () => {
     store.update(await backend.setScenario!("stale"));
     await screen.findByText("Paused");
     expect(screen.getAllByRole("img")).toHaveLength(3);
+  });
+  it("keeps live charts visible after a clock rollback with older cleanup reports in the future", async () => {
+    const backend = createDemoBackend();
+    const base = await backend.bootstrap();
+    const timestamp = Date.now();
+    const first = { ...base.snapshot!, timestampMs: timestamp - 1000 };
+    const last = {
+      ...first,
+      sequence: first.sequence + 1,
+      timestampMs: timestamp,
+    };
+    const before = { ...first, timestampMs: timestamp + 3_600_000 };
+    const after = { ...last, timestampMs: before.timestampMs + 1000 };
+    const report: CleanupReport = {
+      id: "before-clock-rollback",
+      regions: [],
+      results: [],
+      status: "completed",
+      startedAtMs: before.timestampMs,
+      durationMs: 1000,
+      before,
+      after,
+      message: "",
+      errorCode: null,
+      observations: [
+        {
+          atSeconds: 16,
+          snapshot: { ...after, timestampMs: after.timestampMs + 16_000 },
+        },
+      ],
+    };
+    backend.bootstrap = async () => ({
+      ...base,
+      snapshot: last,
+      history: [first, last],
+      reports: [report],
+    });
+    backend.onSnapshot = async () => () => {};
+    const { container } = render(
+      <App backend={backend} store={createTelemetryStore(backend)} />,
+    );
+    await screen.findByRole("region", { name: "Physical Memory" });
+    expect(screen.queryAllByText("Waiting for readings")).toHaveLength(0);
+    expect(
+      container.querySelectorAll('.chart-plot > svg path[fill="none"]'),
+    ).toHaveLength(3);
+    for (const chart of screen.getAllByRole("img"))
+      expect(chart).not.toHaveAccessibleName(/Waiting for readings/);
+  });
+  it("applies the two-day range to all charts and reports the full recording duration", async () => {
+    setup();
+    await screen.findByRole("region", { name: "Physical Memory" });
+    const range = screen.getByRole("combobox", { name: "Chart time range" });
+    fireEvent.click(range);
+    fireEvent.click(screen.getByRole("option", { name: "2 days" }));
+    for (const label of ["Physical Memory", "Pagefile", "System Working Set"])
+      expect(screen.getByRole("img", { name: new RegExp(`${label} over 2 days\\.`) }))
+        .toBeVisible();
+    expect(screen.getByText(/2 days recorded|1 day 23 hours recorded/)).toBeVisible();
+  });
+
+  it("previews dark appearance, discards it on cancel, and saves it on request", async () => {
+    const { backend } = setup();
+    const save = vi.spyOn(backend, "savePreferences");
+    await screen.findByRole("region", { name: "Physical Memory" });
+    const originalTheme = document.documentElement.dataset.theme;
+    fireEvent.click(screen.getByRole("button", { name: "Open Preferences" }));
+    fireEvent.click(await screen.findByRole("radio", { name: "Dark" }));
+    expect(document.documentElement).toHaveAttribute("data-theme", "dark");
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(document.documentElement).toHaveAttribute("data-theme", originalTheme);
+    expect(save).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Open Preferences" }));
+    fireEvent.click(await screen.findByRole("radio", { name: "Dark" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect((await backend.bootstrap()).preferences.theme).toBe("dark");
+    expect(document.documentElement).toHaveAttribute("data-theme", "dark");
+    fireEvent.click(screen.getByRole("button", { name: "Open Preferences" }));
+    expect(await screen.findByRole("radio", { name: "Dark" })).toBeChecked();
+    fireEvent.click(screen.getByRole("radio", { name: "Light" }));
+    fireEvent(screen.getByRole("dialog"), new Event("cancel", { bubbles: true, cancelable: true }));
+    expect(document.documentElement).toHaveAttribute("data-theme", "dark");
   });
   it("starts cleanup from one click without a dialog and marks the measured graph changes", async () => {
     const { backend } = setup();
