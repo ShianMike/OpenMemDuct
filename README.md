@@ -4,7 +4,7 @@ OpenMemDuct is a Windows memory monitor and cleanup app built with **React, Taur
 
 Designed for a lightweight tray workflow, it pairs clear memory graphs with a live physical-memory percentage and configurable cleanup operations.
 
-[Download 0.1.3 for Windows](https://github.com/ShianMike/OpenMemDuct/releases/download/v0.1.3/OpenMemDuct_0.1.3_x64-setup.exe) · [Report an Issue](https://github.com/ShianMike/OpenMemDuct/issues)
+[Download 0.1.4 for Windows](https://github.com/ShianMike/OpenMemDuct/releases/download/v0.1.4/OpenMemDuct_0.1.4_x64-setup.exe) · [Report an Issue](https://github.com/ShianMike/OpenMemDuct/issues)
 
 **Unsigned Windows installer:** The installer and app binaries have no Windows Authenticode publisher signature. Tauri updater signatures authenticate in-app updates separately. Windows may show **Unknown publisher** or a **SmartScreen** warning. Review the release details and checksum below before deciding whether to run it; keep Windows protections enabled.
 
@@ -36,7 +36,7 @@ Cleanup is currently enabled for **Windows build 26200**. Other builds remain in
 
 ## Getting Started
 
-Download the [0.1.3 Windows x64 setup EXE](https://github.com/ShianMike/OpenMemDuct/releases/download/v0.1.3/OpenMemDuct_0.1.3_x64-setup.exe), run the installer, and open OpenMemDuct.
+Download the [0.1.4 Windows x64 setup EXE](https://github.com/ShianMike/OpenMemDuct/releases/download/v0.1.4/OpenMemDuct_0.1.4_x64-setup.exe), run the installer, and open OpenMemDuct.
 
 1. Open **Preferences → Memory** and choose the regions to clean.
 2. Select **Clean Memory**. Results appear on each graph; select a result label for details.
@@ -71,20 +71,20 @@ See [Contributing](CONTRIBUTING.md) for checks and project structure.
 
 ## Release Status
 
-Version **0.1.3**, dated **2026-10-30** (Asia/Manila), targets Windows 11 x64. It adds eight chart durations, bounded two-day session history, date-aware labels for day-long ranges, and Light/Dark/System appearance with immediate preview, saved choices, and cancellation that restores the saved appearance.
+Version **0.1.4**, dated **2026-10-30** (Asia/Manila), targets Windows 11 x64. This security patch updates Tauri's updater from 2.14.0 to 2.14.1 and its ZIP dependency from 4.6.1 to 9.1.3, fixing the ZIP parser-differential, symlink-extraction allocation, and AES authentication advisories. Source and packaging checks reject ZIP versions below 9.0.5 and prerelease versions in the Windows dependency graph. In-app updates continue to require a Tauri updater signature and a matching signed version.
 
-See the [v0.1.3 release notes](https://github.com/ShianMike/OpenMemDuct/releases/tag/v0.1.3) for published assets, the exact source commit, Windows Checks and Package CI results, installer checksum, and runtime validation coverage.
+See the [v0.1.4 release notes](https://github.com/ShianMike/OpenMemDuct/releases/tag/v0.1.4) for published assets, the exact source commit, Windows Checks and Package CI results, installer checksum, and runtime validation coverage.
 
-The release artifact set is `OpenMemDuct_0.1.3_x64-setup.exe`, `OpenMemDuct_0.1.3_x64-setup.exe.sig`, `latest.json`, and `SHA256SUMS`. The checksum file covers the installer, signature, and manifest.
+The release artifact set is `OpenMemDuct_0.1.4_x64-setup.exe`, `OpenMemDuct_0.1.4_x64-setup.exe.sig`, `latest.json`, and `SHA256SUMS`. The checksum file covers the installer, signature, and manifest.
 
-Download the installer and [SHA256SUMS](https://github.com/ShianMike/OpenMemDuct/releases/download/v0.1.3/SHA256SUMS) from the same release into one folder, open PowerShell there, and run:
+Download the installer and [SHA256SUMS](https://github.com/ShianMike/OpenMemDuct/releases/download/v0.1.4/SHA256SUMS) from the same release into one folder, open PowerShell there, and run:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 -LiteralPath .\OpenMemDuct_0.1.3_x64-setup.exe
+Get-FileHash -Algorithm SHA256 -LiteralPath .\OpenMemDuct_0.1.4_x64-setup.exe
 Get-Content -LiteralPath .\SHA256SUMS
 ```
 
-Compare the reported hash with the entry for `OpenMemDuct_0.1.3_x64-setup.exe` in `SHA256SUMS` (letter case does not matter). If they differ, do not run the installer. A match confirms the downloaded bytes match the published checksum; it is not a trusted publisher signature or a safety guarantee.
+Compare the reported hash with the entry for `OpenMemDuct_0.1.4_x64-setup.exe` in `SHA256SUMS` (letter case does not matter). If they differ, do not run the installer. A match confirms the downloaded bytes match the published checksum; it is not a trusted publisher signature or a safety guarantee.
 
 The original 0.1.0 installer has no in-app updater, and its immutable release has no updater signature or manifest. Version 0.1.1 introduced optional automatic updates. Users of the original 0.1.0 installer need one manual upgrade to 0.1.1 or a later release to gain the updater. Live updates require the installer, matching `.exe.sig`, and `latest.json` to be published together; the 0.1.0 release remains unchanged. The Tauri updater signature authenticates updates to the app; it is separate from paid Windows Authenticode signing, so the installer and app binaries still have no verified Windows publisher identity.
 

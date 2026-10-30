@@ -2,7 +2,14 @@
 
 ## Unreleased
 
-- Update Tauri's updater to 2.14.1 and ZIP to 9.1.3, fixing the ZIP parser-differential, symlink-extraction allocation, and AES authentication advisories. Source and packaging checks reject affected ZIP versions in the Windows dependency graph.
+## 0.1.4 — 2026-10-30 (Asia/Manila)
+
+Windows Authenticode publisher signing remains absent. Tauri updater signatures authenticate in-app updates separately and do not establish a verified Windows publisher identity.
+
+- Update Tauri's updater from 2.14.0 to 2.14.1 and ZIP from 4.6.1 to 9.1.3, fixing the [ZIP parser-differential advisory (GHSA-m665-v7pm-7grj)](https://github.com/advisories/GHSA-m665-v7pm-7grj), [symlink-extraction allocation advisory (GHSA-q7v9-x93c-xqv3)](https://github.com/advisories/GHSA-q7v9-x93c-xqv3), and [AES authentication advisory (GHSA-8hxf-qr8p-62x4)](https://github.com/advisories/GHSA-8hxf-qr8p-62x4).
+- Reject ZIP versions below 9.0.5 and prerelease versions in the Windows dependency graph during Source checks and Package.
+
+Cleanup remains limited to Windows 11 x64 build 26200; other builds remain in monitoring mode. In-app updates continue to require a Tauri updater signature and a matching signed version.
 
 ## 0.1.3 — 2026-10-30 (Asia/Manila)
 
