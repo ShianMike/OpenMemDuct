@@ -10,6 +10,7 @@ Windows Authenticode publisher signing remains absent. Tauri updater signatures 
 - Add a warm graphite and moss dark palette with copper accents across the dashboard, preferences, dropdowns, and cleanup details.
 - Add Light, Dark, and System choices under Preferences → General → Appearance, with immediate preview, Save to persist across launches, and Cancel to restore the saved appearance.
 - Keep older preferences compatible by defaulting a missing appearance setting to System. System follows Windows appearance changes while the app runs.
+- Keep monitoring live after a backward Windows clock correction by restarting the affected session history.
 
 Cleanup remains limited to Windows 11 x64 build 26200; other builds remain in monitoring mode. Session history is not saved to disk and clears when the app quits.
 

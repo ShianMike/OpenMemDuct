@@ -150,11 +150,14 @@ export function App({
   const stale =
     !data.snapshot?.metrics || now - data.snapshot.timestampMs > 6500;
   const latest = data.reports[0];
-  const chartNow = Math.max(
-    stale ? now : (data.snapshot?.timestampMs ?? now),
+  const chartClock = stale ? now : (data.snapshot?.timestampMs ?? now);
+  // A cleanup can arrive before its next telemetry sample. Reports from before
+  // a clock rollback must not keep the live chart anchored in the future.
+  const cleanupTimes = [
     latest?.after?.timestampMs ?? latest?.startedAtMs ?? 0,
     latest?.observations.at(-1)?.snapshot.timestampMs ?? 0,
-  );
+  ].filter((timestamp) => timestamp <= Math.max(now, chartClock) + 6500);
+  const chartNow = Math.max(chartClock, ...cleanupTimes);
   const chartStart = Math.max(
     chartNow - minutes * 60_000,
     Math.min(data.history[0]?.timestampMs ?? chartNow, chartNow - 60_000),

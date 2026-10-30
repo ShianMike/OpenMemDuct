@@ -15,10 +15,14 @@ const HISTORY_LIMIT: usize = (HISTORY_RECENT_DURATION_MS / RECENT_BUCKET_MS + 1)
         * ARCHIVE_BUCKET_SAMPLES;
 
 pub fn push_history(history: &mut VecDeque<MemorySnapshot>, snapshot: MemorySnapshot) {
-    if history.back().is_some_and(|last| {
-        snapshot.sequence <= last.sequence || snapshot.timestamp_ms < last.timestamp_ms
-    }) {
-        return;
+    if let Some(last) = history.back() {
+        if snapshot.sequence <= last.sequence {
+            return;
+        }
+        // A newer sequence remains current when the system clock moves backwards.
+        if snapshot.timestamp_ms < last.timestamp_ms {
+            history.clear();
+        }
     }
     history.push_back(snapshot);
     compact(history);
@@ -148,8 +152,40 @@ mod tests {
         assert_eq!(history.back().unwrap().sequence, 9999);
         let previous = history.clone();
         push_history(&mut history, sample(9999, 10_000));
-        push_history(&mut history, sample(10_000, 1));
+        push_history(&mut history, sample(9998, 1));
         assert_eq!(history, previous);
+    }
+
+    #[test]
+    fn rollback_resets_history_and_sampling_resumes_with_monotonic_elapsed_time() {
+        let mut history = VecDeque::from([sample(0, 60_000), sample(1, 61_000)]);
+        let mut rollback = sample(2, 1000);
+        rollback.elapsed_ms = 62_000;
+        push_history(&mut history, rollback.clone());
+        assert_eq!(history, VecDeque::from([rollback.clone()]));
+
+        // Old sequences cannot restore future timestamps or trigger another reset.
+        push_history(&mut history, sample(1, 63_000));
+        push_history(&mut history, sample(2, 63_000));
+        push_history(&mut history, sample(2, 0));
+        assert_eq!(history, VecDeque::from([rollback.clone()]));
+
+        for offset in 1..10_000 {
+            let mut next = sample(rollback.sequence + offset, rollback.timestamp_ms + offset);
+            next.elapsed_ms = rollback.elapsed_ms + offset;
+            push_history(&mut history, next);
+        }
+        assert_eq!(history.len(), 11);
+        assert!(history.len() <= HISTORY_LIMIT);
+        assert_eq!(history.front(), Some(&rollback));
+        assert_eq!(history.back().unwrap().sequence, 10_001);
+        assert_eq!(history.back().unwrap().timestamp_ms, 10_999);
+        assert!(history
+            .iter()
+            .zip(history.iter().skip(1))
+            .all(|(previous, next)| previous.sequence < next.sequence
+                && previous.timestamp_ms < next.timestamp_ms
+                && previous.elapsed_ms < next.elapsed_ms));
     }
 
     #[test]

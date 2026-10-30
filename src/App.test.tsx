@@ -248,6 +248,54 @@ describe("minimal dashboard", () => {
     await screen.findByText("Paused");
     expect(screen.getAllByRole("img")).toHaveLength(3);
   });
+  it("keeps live charts visible after a clock rollback with older cleanup reports in the future", async () => {
+    const backend = createDemoBackend();
+    const base = await backend.bootstrap();
+    const timestamp = Date.now();
+    const first = { ...base.snapshot!, timestampMs: timestamp - 1000 };
+    const last = {
+      ...first,
+      sequence: first.sequence + 1,
+      timestampMs: timestamp,
+    };
+    const before = { ...first, timestampMs: timestamp + 3_600_000 };
+    const after = { ...last, timestampMs: before.timestampMs + 1000 };
+    const report: CleanupReport = {
+      id: "before-clock-rollback",
+      regions: [],
+      results: [],
+      status: "completed",
+      startedAtMs: before.timestampMs,
+      durationMs: 1000,
+      before,
+      after,
+      message: "",
+      errorCode: null,
+      observations: [
+        {
+          atSeconds: 16,
+          snapshot: { ...after, timestampMs: after.timestampMs + 16_000 },
+        },
+      ],
+    };
+    backend.bootstrap = async () => ({
+      ...base,
+      snapshot: last,
+      history: [first, last],
+      reports: [report],
+    });
+    backend.onSnapshot = async () => () => {};
+    const { container } = render(
+      <App backend={backend} store={createTelemetryStore(backend)} />,
+    );
+    await screen.findByRole("region", { name: "Physical Memory" });
+    expect(screen.queryAllByText("Waiting for readings")).toHaveLength(0);
+    expect(
+      container.querySelectorAll('.chart-plot > svg path[fill="none"]'),
+    ).toHaveLength(3);
+    for (const chart of screen.getAllByRole("img"))
+      expect(chart).not.toHaveAccessibleName(/Waiting for readings/);
+  });
   it("applies the two-day range to all charts and reports the full recording duration", async () => {
     setup();
     await screen.findByRole("region", { name: "Physical Memory" });

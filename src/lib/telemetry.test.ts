@@ -25,6 +25,17 @@ import {
 
 const snapshot: MemorySnapshot = fixture;
 
+function rollbackReadings(): MemorySnapshot[] {
+  return [60_000, 61_000, 62_000, 10_000, 11_000, 12_000].map(
+    (timestampMs, sequence) => ({
+      ...snapshot,
+      sequence,
+      timestampMs,
+      elapsedMs: sequence * 1000,
+    }),
+  );
+}
+
 function archiveReadings(start = 0, firstSequence = 0): MemorySnapshot[] {
   return Array.from({ length: 12 }, (_, index) => {
     const metrics = {
@@ -178,26 +189,31 @@ describe("history and graph", () => {
       tone: "attention",
     });
   });
-  it("deduplicates and rejects invalid, out-of-order or regressing readings", () => {
+  it("rejects invalid and stale sequences before considering wall-clock changes", () => {
     const history = [snapshot];
     expect(appendHistory(history, snapshot)).toBe(history);
-    expect(
-      appendHistory(history, { ...snapshot, sequence: snapshot.sequence - 1 }),
-    ).toBe(history);
-    expect(
-      appendHistory(history, {
-        ...snapshot,
-        sequence: snapshot.sequence + 1,
-        timestampMs: snapshot.timestampMs - 1,
-      }),
-    ).toBe(history);
+    for (const sequence of [snapshot.sequence - 1, snapshot.sequence])
+      for (const timestampMs of [
+        snapshot.timestampMs - 1000,
+        snapshot.timestampMs + 1000,
+      ])
+        expect(
+          appendHistory(history, { ...snapshot, sequence, timestampMs }),
+        ).toBe(history);
     expect(
       appendHistory(history, {
         ...snapshot,
         sequence: snapshot.sequence + 1,
+        timestampMs: snapshot.timestampMs - 1000,
         elapsedMs: Number.NaN,
       }),
     ).toBe(history);
+  });
+  it("starts fresh history on a newer sequence with an earlier wall clock", () => {
+    const rows = rollbackReadings();
+    const history = appendHistory(rows.slice(0, 3), rows[3]);
+    expect(history).toEqual([rows[3]]);
+    expect(appendHistory(history, rows[4])).toEqual(rows.slice(3, 5));
   });
   it("bounds subsecond bursts while preserving the first and latest readings", () => {
     let samples: MemorySnapshot[] = [];
@@ -427,6 +443,117 @@ describe("history and graph", () => {
     expect(offSnapshot).toHaveBeenCalledOnce();
     expect(offCleanup).toHaveBeenCalledOnce();
   });
+  it("updates the live snapshot after rollback and keeps sampling before the old clock catches up", async () => {
+    const backend = createDemoBackend();
+    const base = await backend.bootstrap();
+    const rows = rollbackReadings();
+    let emit: (reading: MemorySnapshot) => void = () => {};
+    backend.onSnapshot = async (callback) => {
+      emit = callback;
+      return () => {};
+    };
+    backend.bootstrap = async () => ({
+      ...base,
+      history: rows.slice(0, 3),
+      snapshot: rows[2],
+    });
+    const store = createTelemetryStore(backend);
+    const disconnect = store.connect();
+    await vi.waitFor(() =>
+      expect(store.getSnapshot().data?.snapshot).toBe(rows[2]),
+    );
+    emit(rows[3]);
+    expect(store.getSnapshot().data?.snapshot).toBe(rows[3]);
+    expect(store.getSnapshot().data?.history).toEqual([rows[3]]);
+    const afterRollback = store.getSnapshot();
+    emit(rows[2]);
+    emit({ ...rows[3], timestampMs: 63_000 });
+    emit({ ...rows[3], timestampMs: 9000 });
+    emit({ ...rows[4], timestampMs: 9000, elapsedMs: Number.NaN });
+    emit({
+      ...rows[4],
+      timestampMs: 9000,
+      metrics: { ...snapshot.metrics!, physicalTotal: 0 },
+    });
+    expect(store.getSnapshot()).toBe(afterRollback);
+    emit(rows[4]);
+    expect(store.getSnapshot().data?.snapshot).toBe(rows[4]);
+    expect(store.getSnapshot().data?.history).toEqual(rows.slice(3, 5));
+    disconnect();
+  });
+  it.each([false, true])(
+    "merges pending rollback events with native backfill (native newer: %s)",
+    async (nativeNewer) => {
+      const backend = createDemoBackend();
+      const base = await backend.bootstrap();
+      const rows = rollbackReadings();
+      let emit: (reading: MemorySnapshot) => void = () => {};
+      backend.onSnapshot = async (callback) => {
+        emit = callback;
+        return () => {};
+      };
+      backend.bootstrap = async () => {
+        for (const reading of rows.slice(1, 5)) emit(reading);
+        emit(rows[2]);
+        emit({ ...rows[4], timestampMs: 63_000 });
+        emit({ ...rows[5], elapsedMs: Number.NaN });
+        const history = nativeNewer ? rows.slice(3) : rows.slice(0, 3);
+        return { ...base, history, snapshot: history.at(-1)! };
+      };
+      const store = createTelemetryStore(backend);
+      const disconnect = store.connect();
+      await vi.waitFor(() => expect(store.getSnapshot().data).not.toBeNull());
+      expect(store.getSnapshot().data?.history).toEqual(
+        nativeNewer ? rows.slice(3) : rows.slice(3, 5),
+      );
+      expect(store.getSnapshot().data?.snapshot).toBe(
+        nativeNewer ? rows[5] : rows[4],
+      );
+      disconnect();
+    },
+  );
+  it.each([false, true])(
+    "keeps the newest sequence when rollback occurs during reconnect (native newer: %s)",
+    async (nativeNewer) => {
+      const backend = createDemoBackend();
+      const base = await backend.bootstrap();
+      const rows = rollbackReadings();
+      let emit: (reading: MemorySnapshot) => void = () => {};
+      backend.onSnapshot = async (callback) => {
+        emit = callback;
+        return () => {};
+      };
+      backend.bootstrap = vi
+        .fn()
+        .mockResolvedValueOnce({ ...base, history: [rows[0]], snapshot: rows[0] })
+        .mockImplementationOnce(async () => {
+          for (const reading of rows.slice(1, 5)) emit(reading);
+          emit(rows[2]);
+          const history = nativeNewer ? rows.slice(3) : rows.slice(0, 3);
+          return { ...base, history, snapshot: history.at(-1)! };
+        });
+      const store = createTelemetryStore(backend);
+      const disconnect = store.connect();
+      await vi.waitFor(() =>
+        expect(store.getSnapshot().data?.snapshot).toBe(rows[0]),
+      );
+      disconnect();
+      const disconnectAgain = store.connect();
+      await vi.waitFor(() =>
+        expect(store.getSnapshot().data?.history).toEqual(
+          nativeNewer ? rows.slice(3) : rows.slice(3, 5),
+        ),
+      );
+      expect(store.getSnapshot().data?.snapshot).toBe(
+        nativeNewer ? rows[5] : rows[4],
+      );
+      emit(rows[2]);
+      expect(store.getSnapshot().data?.snapshot).toBe(
+        nativeNewer ? rows[5] : rows[4],
+      );
+      disconnectAgain();
+    },
+  );
   it("seeds a bounded two-day preview and preserves native backfill during bootstrap", async () => {
     const backend = createDemoBackend();
     const base = await backend.bootstrap();

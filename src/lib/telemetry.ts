@@ -62,13 +62,14 @@ export function appendHistory(
   history: MemorySnapshot[],
   reading: MemorySnapshot,
 ): MemorySnapshot[] {
+  const last = history.at(-1);
   if (
     !validSnapshot(reading) ||
-    (history.length > 0 &&
-      (reading.sequence <= history[history.length - 1].sequence ||
-        reading.timestampMs < history[history.length - 1].timestampMs))
+    (last && reading.sequence <= last.sequence)
   )
     return history;
+  // A newer sequence remains current when the system clock moves backwards.
+  if (last && reading.timestampMs < last.timestampMs) return [reading];
   return compactHistory([...history, reading]);
 }
 
