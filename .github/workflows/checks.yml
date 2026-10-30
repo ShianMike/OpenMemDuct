@@ -37,6 +37,14 @@ jobs:
           $dependencies = cargo tree --locked --manifest-path src-tauri/Cargo.toml --target x86_64-pc-windows-msvc --edges normal,build,dev --prefix none --format '{p}'
           if ($LASTEXITCODE -ne 0) { throw 'Could not inspect Windows dependencies.' }
           if ($dependencies -match '^glib v') { throw 'glib is now a Windows dependency. Reassess GHSA-wrw7-89jp-8q8g before building.' }
+          foreach ($dependency in $dependencies) {
+            if ($dependency -match '^zip v(\S+)') {
+              $zipVersion = $Matches[1]
+              if ($zipVersion -notmatch '^\d+\.\d+\.\d+$' -or [version]$zipVersion -lt [version]'9.0.5') {
+                throw "zip $zipVersion is affected by reviewed archive advisories. Require a patched stable version >=9.0.5."
+              }
+            }
+          }
       - run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
       - run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
       - run: cargo test --locked --manifest-path src-tauri/Cargo.toml

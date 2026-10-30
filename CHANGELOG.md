@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Update Tauri's updater to 2.14.1 and ZIP to 9.1.3, fixing the ZIP parser-differential, symlink-extraction allocation, and AES authentication advisories. Source and packaging checks reject affected ZIP versions in the Windows dependency graph.
+
 ## 0.1.3 — 2026-10-30 (Asia/Manila)
 
 Windows Authenticode publisher signing remains absent. Tauri updater signatures authenticate in-app updates separately and do not establish a verified Windows publisher identity.
