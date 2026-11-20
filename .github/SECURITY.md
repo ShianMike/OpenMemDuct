@@ -8,7 +8,7 @@ Include the affected version, Windows build, reproduction steps, expected and ac
 
 ## Supported Versions
 
-Security fixes target the latest published release. Cleanup support is currently limited to Windows 11 x64 build 26200.
+Security fixes target the latest published release. The [Windows requirements](../README.md#requirements) describe when cleanup is available.
 
 ## Security Boundaries
 
@@ -17,6 +17,8 @@ The dashboard uses local assets and a limited set of Tauri commands. Cleanup run
 Published installers are unsigned. Verify downloads against the release's SHA256SUMS; a checksum establishes file integrity, not publisher identity. Repository protection does not replace Windows account security or code signing.
 
 ## Reviewed Dependency Alerts
+
+On November 20, 2026, ESLint 10.15.0 and TypeScript ESLint 8.73.0 raised the resolved `minimatch` version to 11.0.9, fixing [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249). The only locked copy is used by the development lint tools.
 
 On October 30, 2026, the updater dependency was raised to `tauri-plugin-updater >=2.14.1` and the lockfile updated from `zip` 4.6.1 to 9.1.3. The [upstream patch](https://github.com/tauri-apps/plugins-workspace/releases/tag/updater-v2.14.1) supports ZIP 9 and resolves:
 

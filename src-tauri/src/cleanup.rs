@@ -3,6 +3,8 @@ use std::{
     collections::VecDeque,
     time::{Duration, Instant},
 };
+#[cfg(windows)]
+use windows::Win32::{Foundation::NTSTATUS, System::SystemInformation::OSVERSIONINFOEXW};
 
 #[derive(Default)]
 pub struct CleanupCoordinator {
@@ -120,45 +122,96 @@ pub fn empty_report(
 }
 
 #[cfg(windows)]
-pub fn windows_build() -> Option<u32> {
+fn windows_version() -> Option<OSVERSIONINFOEXW> {
     use windows::{
         core::{s, w},
-        Win32::{
-            Foundation::NTSTATUS,
-            System::{
-                LibraryLoader::{GetModuleHandleW, GetProcAddress},
-                SystemInformation::OSVERSIONINFOW,
-            },
-        },
+        Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress},
     };
     unsafe {
         let module = GetModuleHandleW(w!("ntdll.dll")).ok()?;
         let address = GetProcAddress(module, s!("RtlGetVersion"))?;
-        let query: unsafe extern "system" fn(*mut OSVERSIONINFOW) -> NTSTATUS =
+        let query: unsafe extern "system" fn(*mut OSVERSIONINFOEXW) -> NTSTATUS =
             std::mem::transmute(address);
-        let mut info = OSVERSIONINFOW {
-            dwOSVersionInfoSize: std::mem::size_of::<OSVERSIONINFOW>() as u32,
+        let mut info = OSVERSIONINFOEXW {
+            dwOSVersionInfoSize: std::mem::size_of::<OSVERSIONINFOEXW>() as u32,
             ..Default::default()
         };
-        (query(&mut info).0 >= 0).then_some(info.dwBuildNumber)
+        (query(&mut info).0 >= 0).then_some(info)
+    }
+}
+
+#[cfg(windows)]
+fn is_native_x64() -> bool {
+    use windows::Win32::System::{
+        SystemInformation::{IMAGE_FILE_MACHINE_AMD64, IMAGE_FILE_MACHINE_UNKNOWN},
+        Threading::{GetCurrentProcess, IsWow64Process2},
+    };
+    let mut process = IMAGE_FILE_MACHINE_UNKNOWN;
+    let mut host = IMAGE_FILE_MACHINE_UNKNOWN;
+    cfg!(target_arch = "x86_64")
+        && unsafe { IsWow64Process2(GetCurrentProcess(), &mut process, Some(&mut host)) }.is_ok()
+        && process == IMAGE_FILE_MACHINE_UNKNOWN
+        && host == IMAGE_FILE_MACHINE_AMD64
+}
+
+#[cfg(windows)]
+type SetSystemInformation = unsafe extern "system" fn(i32, *mut core::ffi::c_void, u32) -> NTSTATUS;
+
+#[cfg(windows)]
+fn cleanup_api() -> Option<SetSystemInformation> {
+    use windows::{
+        core::{s, w},
+        Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress},
+    };
+    unsafe {
+        let module = GetModuleHandleW(w!("ntdll.dll")).ok()?;
+        let address = GetProcAddress(module, s!("NtSetSystemInformation"))?;
+        Some(std::mem::transmute::<
+            unsafe extern "system" fn() -> isize,
+            SetSystemInformation,
+        >(address))
+    }
+}
+
+fn cleanup_unavailable_reason(
+    build: Option<u32>,
+    native_x64_client: bool,
+    api_available: bool,
+) -> Option<&'static str> {
+    const MIN_CLEANUP_BUILD: u32 = 26200;
+    if !native_x64_client || !build.is_some_and(|n| n >= MIN_CLEANUP_BUILD) {
+        Some("Cleanup requires Windows 11 build 26200 or later on x64. Monitoring remains available.")
+    } else if !api_available {
+        Some("The Windows cleanup API is unavailable. Monitoring remains available.")
+    } else {
+        None
     }
 }
 
 pub fn capabilities() -> Capabilities {
     #[cfg(windows)]
-    let build = windows_build();
+    let (build, reason) = {
+        use windows::Win32::System::SystemServices::VER_NT_WORKSTATION;
+        let version = windows_version();
+        let build = version.map(|info| info.dwBuildNumber);
+        let native_x64_client = version
+            .is_some_and(|info| u32::from(info.wProductType) == VER_NT_WORKSTATION)
+            && is_native_x64();
+        // Looking up the entry point makes no changes. The helper checks each
+        // operation's result when the user requests cleanup.
+        (
+            build,
+            cleanup_unavailable_reason(build, native_x64_client, cleanup_api().is_some()),
+        )
+    };
     #[cfg(not(windows))]
-    let build = None;
-    // shortcut: cleanup compatibility is limited to these Windows 11 build families; validate each new family before adding it.
-    let supported = cfg!(windows) && cfg!(target_arch = "x86_64") && matches!(build, Some(26200));
+    let (build, reason) = (None, cleanup_unavailable_reason(None, false, false));
     Capabilities {
         platform: std::env::consts::OS.into(),
         build,
-        cleanup_supported: supported,
+        cleanup_supported: reason.is_none(),
         elevated: crate::controls::is_elevated(),
-        reason: (!supported).then(|| {
-            "Cleanup is unavailable on this Windows build. Monitoring remains available.".into()
-        }),
+        reason: reason.map(str::to_owned),
     }
 }
 
@@ -221,10 +274,12 @@ pub fn perform(id: &str, regions: &[CleanupAction], no_op: bool) -> CleanupRepor
         report.message = error;
         return report;
     }
-    if !no_op && !capabilities().cleanup_supported {
-        report.status = CleanupStatus::Unsupported;
-        report.message = "This Windows build has not been enabled for cleanup".into();
-        return report;
+    if !no_op {
+        if let Some(reason) = capabilities().reason {
+            report.status = CleanupStatus::Unsupported;
+            report.message = reason;
+            return report;
+        }
     }
     report.before = Some(sampler.sample());
     report.started_at_ms = now_ms();
@@ -347,24 +402,13 @@ fn enable_privilege(region: CleanupAction) -> Result<(), String> {
 
 #[cfg(windows)]
 fn native_operation(action: CleanupAction) -> Result<(), (CleanupStatus, String)> {
-    use windows::{
-        core::{s, w},
-        Win32::{
-            Foundation::NTSTATUS,
-            System::LibraryLoader::{GetModuleHandleW, GetProcAddress},
-        },
-    };
-    unsafe {
-        let module = GetModuleHandleW(w!("ntdll.dll"))
-            .map_err(|e| (CleanupStatus::Unsupported, e.to_string()))?;
-        let address = GetProcAddress(module, s!("NtSetSystemInformation")).ok_or((
-            CleanupStatus::Unsupported,
-            "NtSetSystemInformation unavailable".into(),
-        ))?;
-        let set: unsafe extern "system" fn(i32, *mut core::ffi::c_void, u32) -> NTSTATUS =
-            std::mem::transmute(address);
+    let set = cleanup_api().ok_or((
+        CleanupStatus::Unsupported,
+        "NtSetSystemInformation unavailable".into(),
+    ))?;
+    let status = unsafe {
         // Private Native API information classes and layouts are isolated here.
-        let status = match action {
+        match action {
             CleanupAction::SystemFileCache => {
                 let mut info = crate::memory::FileCacheInformation {
                     minimum_working_set: usize::MAX,
@@ -407,17 +451,33 @@ fn native_operation(action: CleanupAction) -> Result<(), (CleanupStatus, String)
                     std::mem::size_of_val(&command) as u32,
                 )
             }
-        };
-        if status.0 >= 0 {
-            return Ok(());
         }
-        let category = match status.0 as u32 {
-            0xC0000061 | 0xC0000022 => CleanupStatus::PermissionDenied,
-            0xC0000002 | 0xC0000003 | 0xC00000BB => CleanupStatus::Unsupported,
-            _ => CleanupStatus::Failed,
-        };
-        Err((category, format!("0x{:08X}", status.0 as u32)))
+    };
+    native_result(status)
+}
+
+#[cfg(windows)]
+fn native_result(status: NTSTATUS) -> Result<(), (CleanupStatus, String)> {
+    use windows::Win32::Foundation::{
+        STATUS_ACCESS_DENIED, STATUS_INFO_LENGTH_MISMATCH, STATUS_INVALID_DEVICE_REQUEST,
+        STATUS_INVALID_INFO_CLASS, STATUS_INVALID_PARAMETER, STATUS_NOT_IMPLEMENTED,
+        STATUS_NOT_SUPPORTED, STATUS_PRIVILEGE_NOT_HELD,
+    };
+    if status.0 >= 0 {
+        return Ok(());
     }
+    let category = match status {
+        STATUS_PRIVILEGE_NOT_HELD | STATUS_ACCESS_DENIED => CleanupStatus::PermissionDenied,
+        // Windows may reject one of the fixed information classes, commands, or layouts.
+        STATUS_NOT_IMPLEMENTED
+        | STATUS_INVALID_INFO_CLASS
+        | STATUS_INFO_LENGTH_MISMATCH
+        | STATUS_INVALID_PARAMETER
+        | STATUS_INVALID_DEVICE_REQUEST
+        | STATUS_NOT_SUPPORTED => CleanupStatus::Unsupported,
+        _ => CleanupStatus::Failed,
+    };
+    Err((category, format!("0x{:08X}", status.0 as u32)))
 }
 
 #[cfg(windows)]
@@ -511,6 +571,44 @@ fn native_operation(_: CleanupAction) -> Result<(), (CleanupStatus, String)> {
 mod tests {
     use super::*;
     const ID: &str = "aabbccdd-1122-3344-5566-778899001122";
+
+    #[test]
+    fn newer_windows_clients_keep_cleanup_when_the_api_is_present() {
+        for build in [26200, 26300, 28000, 30000] {
+            assert_eq!(cleanup_unavailable_reason(Some(build), true, true), None);
+        }
+        assert!(cleanup_unavailable_reason(Some(26100), true, true).is_some());
+        assert!(cleanup_unavailable_reason(None, true, true).is_some());
+        assert!(cleanup_unavailable_reason(Some(26300), false, true).is_some());
+        assert!(cleanup_unavailable_reason(Some(26300), true, false).is_some());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn rejected_native_layouts_are_reported_without_masking_permission_errors() {
+        use windows::Win32::Foundation::{
+            STATUS_ACCESS_DENIED, STATUS_INFO_LENGTH_MISMATCH, STATUS_INVALID_INFO_CLASS,
+            STATUS_UNSUCCESSFUL,
+        };
+        assert_eq!(native_result(NTSTATUS(0)), Ok(()));
+        assert_eq!(
+            native_result(STATUS_INFO_LENGTH_MISMATCH),
+            Err((CleanupStatus::Unsupported, "0xC0000004".into()))
+        );
+        assert_eq!(
+            native_result(STATUS_INVALID_INFO_CLASS),
+            Err((CleanupStatus::Unsupported, "0xC0000003".into()))
+        );
+        assert_eq!(
+            native_result(STATUS_ACCESS_DENIED),
+            Err((CleanupStatus::PermissionDenied, "0xC0000022".into()))
+        );
+        assert_eq!(
+            native_result(STATUS_UNSUCCESSFUL),
+            Err((CleanupStatus::Failed, "0xC0000001".into()))
+        );
+    }
+
     #[test]
     fn validates_id_and_serializes_requests() {
         assert!(!valid_request_id("../path"));

@@ -1,24 +1,23 @@
 # Release Preparation
 
-This guide targets release **0.1.4**, dated **2026-10-30** (Asia/Manila). Confirm npm, Cargo, their lockfiles, and Tauri all use 0.1.4 before packaging. The [GitHub Releases page](https://github.com/ShianMike/OpenMemDuct/releases) records published builds, their exact source commits and tags, and their validation limits.
+Confirm npm, Cargo, their lockfiles, and Tauri all use the release version before packaging. The [GitHub Releases page](https://github.com/ShianMike/OpenMemDuct/releases) records published builds, their exact source commits and tags, and their validation limits.
 
 **Unsigned Windows distribution:** The installer and app binaries have no Windows Authenticode publisher signature. Tauri updater signatures authenticate in-app updates separately; Unknown publisher or SmartScreen warnings may still appear.
 
 ## Current Scope
 
 - Target: Windows 11 x64.
-- Cleanup compatibility: build family 26200 only; other builds remain in monitoring mode.
+- Cleanup requires native Windows 11 x64 build 26200 or newer and a cleanup API that resolves at runtime. Validate the claimed operations on the builds named in the release notes.
 - Runtime: Microsoft Edge WebView2.
 - License: MIT; distributed dependencies retain their own licenses.
 - Installer target: NSIS setup EXE.
 - Packaging uses the per-user NSIS bundle configured in `src-tauri/tauri.conf.json`.
-- Version 0.1.4 is a dependency security patch: Tauri's updater moves from 2.14.0 to 2.14.1 and ZIP from 4.6.1 to 9.1.3, fixing the parser-differential, symlink-extraction allocation, and AES authentication advisories linked in the [changelog](../CHANGELOG.md).
 - Source checks and Package reject ZIP versions below 9.0.5 and prerelease versions in the Windows dependency graph. In-app updates continue to require a Tauri updater signature and a matching signed version.
 
 The manual, main-only Package workflow runs the source checks, builds the Windows x64 installer and its updater signature, and uploads exactly four files as one workflow artifact:
 
-- `OpenMemDuct_0.1.4_x64-setup.exe`
-- `OpenMemDuct_0.1.4_x64-setup.exe.sig`
+- `OpenMemDuct_<version>_x64-setup.exe`
+- `OpenMemDuct_<version>_x64-setup.exe.sig`
 - `latest.json`
 - `SHA256SUMS` (hashes for the installer, signature, and manifest)
 
@@ -44,9 +43,9 @@ pwsh -File scripts/prepare-updater-artifacts.ps1 -SelfCheck
 
 The self-check uses synthetic files without signing secrets and retains its fixtures under the ignored `validation/` directory. It checks manifest fields and checksums and rejects missing, empty, malformed, unversioned, or version-mismatched signature inputs, invalid versions, empty installers, and extra installers. Reading the trusted comment here is a packaging consistency check; the native updater verifies the cryptographic signature before trusting the comment. The self-check does not verify a real updater signature or run an installer.
 
-The app's updater endpoint is [the latest release's `latest.json`](https://github.com/ShianMike/OpenMemDuct/releases/latest/download/latest.json). For this release, the generated manifest must contain version `0.1.4`, a UTC RFC 3339 `pub_date`, and one `windows-x86_64` platform. Its `signature` is the `.exe.sig` file's contents, and its installer URL is `https://github.com/ShianMike/OpenMemDuct/releases/download/v0.1.4/OpenMemDuct_0.1.4_x64-setup.exe`. Notes are optional and omitted. Keep the per-user (`currentUser`) NSIS installation mode.
+The app's updater endpoint is [the latest release's `latest.json`](https://github.com/ShianMike/OpenMemDuct/releases/latest/download/latest.json). The generated manifest must contain version `<version>`, a UTC RFC 3339 `pub_date`, and one `windows-x86_64` platform. Its `signature` is the `.exe.sig` file's contents, and its installer URL is `https://github.com/ShianMike/OpenMemDuct/releases/download/v<version>/OpenMemDuct_<version>_x64-setup.exe`. Notes are optional and omitted. Keep the per-user (`currentUser`) NSIS installation mode.
 
-The original public version 0.1.0 installer has no updater, and its immutable release has no `.exe.sig` or `latest.json`. Leave its installer, checksum asset, tag, and version unchanged. Version 0.1.1 introduced the opt-in updater (`autoUpdateEnabled`, off by default); users of the original 0.1.0 installer must manually install 0.1.1 or a later release once to gain it. Publish the 0.1.4 installer, matching signature, manifest, and checksums from the same Package run together so updater-capable installations can receive it through the endpoint. Offline signing or artifact checks do not prove successful automatic update installation.
+The original public version 0.1.0 installer has no updater, and its immutable release has no `.exe.sig` or `latest.json`. Leave its installer, checksum asset, tag, and version unchanged. Version 0.1.1 introduced the opt-in updater (`autoUpdateEnabled`, off by default); users of the original 0.1.0 installer must manually install 0.1.1 or a later release once to gain it. Publish the <version> installer, matching signature, manifest, and checksums from the same Package run together so updater-capable installations can receive it through the endpoint. Offline signing or artifact checks do not prove successful automatic update installation.
 
 Record native behavior and packaged-app evidence against the exact release commit. Report source/CI results and actual automatic update installation coverage separately; do not infer installed-app behavior from this guide or from the artifact self-check.
 
@@ -54,8 +53,8 @@ Record native behavior and packaged-app evidence against the exact release commi
 
 - [ ] Complete the hosted Windows Checks workflow successfully on the intended release commit before packaging. An in-progress run is not a passing release gate.
 - [ ] Pass every command in [Contributing → Checks](../CONTRIBUTING.md#checks) using the committed lockfiles.
-- [ ] Confirm npm, Cargo, both lockfiles, and Tauri versions agree on 0.1.4.
-- [ ] Prepare release notes for the 0.1.4 scope, signing status, and validation limits. After Package succeeds, finalize them with the exact source commit, completed Windows Checks and Package CI links and results, verified installer SHA-256, and factual runtime coverage. Keep local validation paths out of the public release notes.
+- [ ] Confirm npm, Cargo, both lockfiles, and Tauri versions agree.
+- [ ] Prepare release notes covering the candidate's changes, signing status, and validation limits. After Package succeeds, add the exact source commit, completed Windows Checks and Package CI links and results, verified installer SHA-256, and runtime coverage. Keep local validation paths out of the public release notes.
 - [ ] Confirm the updater signing secrets are configured, the embedded public key matches, and updater artifacts are enabled. Never print or commit the private key or password.
 - [ ] Confirm the README screenshots, features, supported builds, and changelog match the candidate. Keep the existing dashboard image; the dark image shows demo two-day history and must not be presented as a real 48-hour runtime validation.
 - [ ] Check deterministic history coverage for one-second recent buckets, five-minute archive boundaries, independent extrema, unavailable readings, the 48-hour cutoff, and the 9,816-snapshot bound in both the frontend and native history paths. Keep fixture results distinct from real session and sleep/resume observations.
@@ -83,7 +82,7 @@ npm run tauri -- build --target x86_64-pc-windows-msvc --bundles nsis --ci
 - [ ] Load legacy preferences without a theme field in an isolated validation environment. Confirm System is selected and existing startup, tray, update, cleanup-region, notification, and shortcut settings survive loading and saving.
 - [ ] Verify the tray percentage, multiple display scales, Explorer restart, second launch, and dashboard close/reopen behavior.
 - [ ] Verify tray-menu Clean memory uses the saved cleanup regions with the dashboard closed and after reopening it.
-- [ ] Verify Preferences → General → Updates shows App version `0.1.4` after installation and upgrade.
+- [ ] Verify Preferences → General → Updates shows App version `<version>` after installation and upgrade.
 - [ ] Verify manual cleanup, UAC cancellation, partial/unsupported outcomes, and the observation period. Default-off operations need their own controlled checks before being described as runtime validated.
 - [ ] Verify notifications, notification sound, and app branding in the installed application.
 - [ ] Verify Start with Windows and Start in Tray, including an actual reboot/sign-in check, cleanup approval reuse after closing/reopening the dashboard, and the frosted cleanup detail popovers, including reduced-transparency mode.
@@ -96,9 +95,9 @@ The development tray-lifecycle and native cleanup observations do not replace th
 ## Publish
 
 - [ ] State the signing status in every release note: Tauri updater signature present; Windows Authenticode publisher signing absent.
-- [ ] Confirm the 0.1.4 changelog entry is dated 2026-10-30 (Asia/Manila) and covers the updater and ZIP security fixes, the patched stable ZIP dependency gate, and the signing and compatibility limits. Preserve historical changelog entries.
+- [ ] Confirm the changelog covers the released changes and records the release date in Asia/Manila. Preserve historical changelog entries.
 - [ ] Wait for both hosted Windows Checks and the main-only Package workflow to finish successfully for the exact release commit. Verify the installer version, real updater signature and signed version, manifest URL, and all packaged checksums before publication.
 - [ ] Tag the exact commit whose checks and packaged artifacts were validated.
-- [ ] Use tag `v0.1.4` and publish all four files from the same validated Package artifact together, preserving their filenames. Do not mix an installer with a signature or manifest from another build. In every release note, link the exact source commit and the Windows Checks and Package CI runs used for that release, and include the installer's SHA-256 checksum.
-- [ ] In every release note, state that cleanup supports Windows build 26200 and other builds remain in monitoring mode. Record factual validation limits: what was checked, on which Windows build, and which installed-app checks or performance comparisons remain unverified. Do not describe source or CI checks as installed-app validation.
+- [ ] Use tag `v<version>` and publish all four files from the same validated Package artifact together, preserving their filenames. Do not mix an installer with a signature or manifest from another build. In every release note, link the exact source commit and the Windows Checks and Package CI runs used for that release, and include the installer's SHA-256 checksum.
+- [ ] In every release note, state the cleanup requirements and which Windows builds and operations were tested. Record any installed-app or performance checks that remain unverified. Do not describe source or CI checks as installed-app validation.
 - [ ] Verify the public release page and all four download links. Confirm `/releases/latest/download/latest.json` resolves to the intended stable release and its platform URL downloads the exact matching installer. Retain the one-time manual upgrade explanation for 0.1.0 users.

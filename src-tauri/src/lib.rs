@@ -146,8 +146,8 @@ fn start_cleanup(
     regions: Vec<CleanupAction>,
     id: String,
 ) -> Result<(), String> {
-    if !cleanup::capabilities().cleanup_supported {
-        return Err("Cleanup unavailable on this Windows build".into());
+    if let Some(reason) = cleanup::capabilities().reason {
+        return Err(reason);
     }
     cleanup::validate_regions(&regions, false)?;
     {
@@ -273,6 +273,13 @@ pub fn dispatch_cli() -> Option<Result<(), String>> {
     }
     if cfg!(debug_assertions) && args == ["--helper-self-test"] {
         return Some(elevation::self_test());
+    }
+    if args == ["--diagnose", "cleanup"] {
+        return Some(
+            serde_json::to_string_pretty(&cleanup::capabilities())
+                .map(|json| println!("{json}"))
+                .map_err(|error| error.to_string()),
+        );
     }
     if args == ["--diagnose"] {
         let reading = memory::Sampler::default().sample();
