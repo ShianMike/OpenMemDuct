@@ -166,7 +166,10 @@ fn cleanup_api() -> Option<SetSystemInformation> {
     unsafe {
         let module = GetModuleHandleW(w!("ntdll.dll")).ok()?;
         let address = GetProcAddress(module, s!("NtSetSystemInformation"))?;
-        Some(std::mem::transmute::<_, SetSystemInformation>(address))
+        Some(std::mem::transmute::<
+            unsafe extern "system" fn() -> isize,
+            SetSystemInformation,
+        >(address))
     }
 }
 
