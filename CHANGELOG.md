@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.1.5 — 2026-11-20 (Asia/Manila)
+
+- Restore cleanup on Windows 11 26H2 (build 26300). On native x64 Windows clients, use build 26200 as a minimum and check for the Windows cleanup API at runtime.
+- Show an unsupported result for individual cleanup operations when Windows rejects their API class or layout. Add a read-only cleanup diagnostic for compatibility reports.
+- Apply the reviewed npm and Rust dependency bumps. Update ESLint and TypeScript ESLint to resolve minimatch 11.0.9 and fix [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249) in the development tools.
+
+Tauri updater signatures authenticate in-app updates. The Windows installer has no Authenticode publisher signature.
+
 ## 0.1.4 — 2026-10-30 (Asia/Manila)
 
 Windows Authenticode publisher signing remains absent. Tauri updater signatures authenticate in-app updates separately and do not establish a verified Windows publisher identity.

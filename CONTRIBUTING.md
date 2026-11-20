@@ -1,6 +1,6 @@
 # Contributing
 
-OpenMemDuct uses React and TypeScript for its interface, Tauri for its desktop shell, and Rust for Windows memory sampling, tray updates, settings, startup, cleanup, and automatic updates. The 0.1.2 scope is tray-menu Clean memory using saved cleanup regions and the running App version under Preferences → General → Updates.
+OpenMemDuct uses React and TypeScript for its interface, Tauri for its desktop shell, and Rust for Windows memory sampling, tray updates, settings, startup, cleanup, and automatic updates.
 
 ## Prerequisites
 
@@ -51,16 +51,17 @@ cargo test --locked --manifest-path src-tauri/Cargo.toml
 
 The frontend build produces web assets. It does not package an application or installer. Native unit tests use read-only counters and no-op cleanup paths; they do not clear the workstation's memory. The Windows Checks workflow runs the same source and test lanes.
 
-Record results against the exact 0.1.2 release commit. Local checks, hosted CI, and packaged-app runtime checks need separate evidence; the updater artifact self-check does not prove automatic update installation. See [Releasing](docs/RELEASING.md) for the release gates and evidence required before publication.
+Record results against the exact release commit. Local checks, hosted CI, and packaged-app runtime checks need separate evidence; the updater artifact self-check does not prove automatic update installation. See [Releasing](docs/RELEASING.md) for the release gates and evidence required before publication.
 
 Read-only diagnostics and the no-op helper transport check are also available:
 
 ```powershell
 cargo run --locked --manifest-path src-tauri/Cargo.toml --bin openmemduct -- --diagnose
+cargo run --locked --manifest-path src-tauri/Cargo.toml --bin openmemduct -- --diagnose cleanup
 cargo run --locked --manifest-path src-tauri/Cargo.toml --bin openmemduct -- --helper-self-test
 ```
 
-The helper self-test sends two no-op requests through one helper and verifies that it exits on disconnect. It also runs in the Windows Checks and Package workflows.
+The cleanup diagnostic reports the detected build and cleanup availability without running any memory operations. The helper self-test sends two no-op requests through one helper and verifies that it exits on disconnect. It also runs in the Windows Checks and Package workflows.
 
 For updater packaging changes, run the PowerShell 7 artifact self-check (also run without secrets by Checks on pull requests and by Package):
 
@@ -90,7 +91,7 @@ The saved `theme` preference supports `system`, `light`, and `dark`. The System 
 
 Physical Memory measures usable physical total minus available memory. Pagefile measures actual pagefile usage and allocation, separately from system commit. System Working Set measures the system file-cache working set against its observed peak. Unknown counters remain unavailable rather than becoming zero.
 
-Cleanup is restricted to Windows 11 x64 build family 26200. Some operations use private Native API classes; any additional build family or cleanup target requires compatibility validation. Keep the fixed cleanup allowlist, authenticated helper transport, request validation, concurrency guard, and observation period intact.
+Cleanup requires native Windows 11 x64, build 26200 or newer, and a Windows cleanup API entry point that resolves at runtime. Resolving it doesn't confirm compatibility with every private information class. Keep the fixed list of cleanup operations and report API rejections per operation. Preserve the authenticated helper transport, request validation, concurrency guard, and observation period.
 
 The first manual cleanup requests elevation when necessary and keeps an authenticated cleanup helper for the app session. Closing the dashboard leaves that session available; quitting the app closes it. Automatic cleanup runs only in an already elevated session on a supported build. Global shortcuts pause while Preferences is open. Settings changes are validated and saved together; a failed save preserves the previous file.
 
